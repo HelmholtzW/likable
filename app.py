@@ -1,7 +1,7 @@
-import gradio as gr
-import time
 import random
+import time
 
+import gradio as gr
 
 gr.NO_RELOAD = False
 
@@ -31,17 +31,24 @@ def get_preview_content():
     return """
     <div style="padding: 20px; font-family: Arial, sans-serif;">
         <h2>Preview - Generated App</h2>
-        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0;
+                    border-radius: 8px;">
             <h3>Todo App</h3>
-            <input type="text" placeholder="Add a new task..." style="width: 70%; padding: 8px; margin-right: 10px;">
-            <button style="padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px;">Add</button>
+            <input type="text" placeholder="Add a new task..."
+                   style="width: 70%; padding: 8px; margin-right: 10px;">
+            <button style="padding: 8px 15px; background: #007bff; color: white;
+                           border: none; border-radius: 4px;">Add</button>
             <ul style="margin-top: 15px; list-style-type: none; padding: 0;">
-                <li style="padding: 8px; border-bottom: 1px solid #eee;">✓ Learn Gradio</li>
-                <li style="padding: 8px; border-bottom: 1px solid #eee;">✓ Build awesome UIs</li>
-                <li style="padding: 8px; border-bottom: 1px solid #eee;">⬜ Deploy to HuggingFace</li>
+                <li style="padding: 8px; border-bottom: 1px solid #eee;">
+                    ✓ Learn Gradio</li>
+                <li style="padding: 8px; border-bottom: 1px solid #eee;">
+                    ✓ Build awesome UIs</li>
+                <li style="padding: 8px; border-bottom: 1px solid #eee;">
+                    ⬜ Deploy to HuggingFace</li>
             </ul>
         </div>
-        <p style="color: #666; font-size: 14px;">This is a live preview of your generated application.</p>
+        <p style="color: #666; font-size: 14px;">
+            This is a live preview of your generated application.</p>
     </div>
     """
 
@@ -58,33 +65,33 @@ def add_task(new_task, tasks):
 def create_todo_app():
     with gr.Blocks() as app:
         gr.Markdown("# Todo App")
-        
+
         with gr.Row():
             new_task = gr.Textbox(
-                placeholder="Add a new task...", 
+                placeholder="Add a new task...",
                 scale=3,
                 container=False
             )
             add_btn = gr.Button("Add", scale=1)
-        
+
         task_list = gr.Dataframe(
             headers=["Tasks"],
             datatype=["str"],
             interactive=False
         )
-        
+
         add_btn.click(
             add_task,
             inputs=[new_task, task_list],
             outputs=[new_task, task_list]
         )
-        
+
         new_task.submit(
             add_task,
             inputs=[new_task, task_list],
             outputs=[new_task, task_list]
         )
-    
+
     return app
 
 if __name__ == "__main__":
@@ -133,7 +140,7 @@ def create_lovable_ui():
                         #         "Deploy to HF Spaces", variant="secondary", scale=1
                         #     )
 
-                        preview_html = gr.HTML(value=get_preview_content())
+                        gr.HTML(value=get_preview_content())
 
             # Code Tab
             with gr.TabItem("Code"):
@@ -164,7 +171,7 @@ def create_lovable_ui():
                         #         "Deploy to HF Spaces", variant="secondary", scale=1
                         #     )
 
-                        code_view = gr.Code(
+                        gr.Code(
                             value=get_code_content(),
                             language="python",
                             lines=20,
