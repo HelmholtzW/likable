@@ -3,9 +3,6 @@ import time
 import random
 
 
-gr.NO_RELOAD = False
-
-
 # Mock function to simulate AI responses
 def simulate_ai_response(message, history):
     """Simulate an AI response for demonstration purposes"""
@@ -92,110 +89,93 @@ if __name__ == "__main__":
     demo.launch()"""
 
 
+def load_file(path):
+    if path is None:
+        return ""
+    # path is a string like "subdir/example.py"
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def save_file(path, new_text):
+    if path is None:
+        gr.Warning("⚠️ No file selected.")
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        gr.Info(f"✅ Saved to: {path}")
+    except Exception as e:
+        gr.Error(f"❌ Error saving: {e}")
+
+
 # Create the main Lovable-style UI
 def create_lovable_ui():
     with gr.Blocks(
         title="💗Likable",
         theme=gr.themes.Soft(),
+        fill_height=True,
     ) as demo:
         gr.Markdown("# 💗Likable")
-        # gr.Markdown(
-        #     "*It's almost Lovable - Build Gradio apps using only a chat interface*"
-        # )
+        gr.Markdown(
+            "*It's almost Lovable - Build Gradio apps using only a chat interface*"
+        )
 
-        with gr.Tabs():
-            # Preview Tab
-            with gr.TabItem("Preview"):
-                with gr.Row(elem_classes="main-container", equal_height=True):
-                    # Left side - Chat Interface
-                    with gr.Column(scale=1, elem_classes="chat-container"):
-                        chatbot_preview = gr.Chatbot(
-                            height=500,
-                            show_copy_button=True,
-                            avatar_images=(None, "🤖"),
-                            bubble_full_width=False,
+        with gr.Row(elem_classes="main-container"):
+            # Left side - Chat Interface
+            with gr.Column(scale=1, elem_classes="chat-container"):
+                chatbot = gr.Chatbot(
+                    height=500,
+                    show_copy_button=True,
+                    avatar_images=(None, "🤖"),
+                    bubble_full_width=False,
+                )
+
+                with gr.Row():
+                    msg_input = gr.Textbox(
+                        placeholder="Describe what you want to build...",
+                        scale=4,
+                        container=False,
+                    )
+                    send_btn = gr.Button("Send", scale=1, variant="primary")
+
+            # Right side - Preview/Code Toggle
+            with gr.Column(scale=4, elem_classes="preview-container"):
+                with gr.Tab("Preview"):
+                    preview = gr.HTML(value=get_preview_content(), visible=True)
+
+                with gr.Tab("Code"):
+                    with gr.Row():
+                        save_btn = gr.Button("Save", size="sm")
+                    with gr.Row(equal_height=True):
+                        file_explorer = gr.FileExplorer(
+                            scale=1, file_count="single", value="app.py"
                         )
-
-                        with gr.Row():
-                            msg_input_preview = gr.Textbox(
-                                placeholder="Describe what you want to build...",
-                                scale=4,
-                                container=False,
-                            )
-                            send_btn_preview = gr.Button(
-                                "Send", scale=1, variant="primary"
-                            )
-
-                    # Right side - Preview Content
-                    with gr.Column(scale=4, elem_classes="content-container"):
-                        # with gr.Row():
-                        #     gr.Button(
-                        #         "Deploy to HF Spaces", variant="secondary", scale=1
-                        #     )
-
-                        preview_html = gr.HTML(value=get_preview_content())
-
-            # Code Tab
-            with gr.TabItem("Code"):
-                with gr.Row(elem_classes="main-container", equal_height=True):
-                    # Left side - Chat Interface
-                    with gr.Column(scale=1, elem_classes="chat-container"):
-                        chatbot_code = gr.Chatbot(
-                            height=500,
-                            show_copy_button=True,
-                            avatar_images=(None, "🤖"),
-                            bubble_full_width=False,
-                        )
-
-                        with gr.Row():
-                            msg_input_code = gr.Textbox(
-                                placeholder="Describe what you want to build...",
-                                scale=4,
-                                container=False,
-                            )
-                            send_btn_code = gr.Button(
-                                "Send", scale=1, variant="primary"
-                            )
-
-                    # Right side - Code Content
-                    with gr.Column(scale=4, elem_classes="content-container"):
-                        # with gr.Row():
-                        #     gr.Button(
-                        #         "Deploy to HF Spaces", variant="secondary", scale=1
-                        #     )
-
-                        code_view = gr.Code(
-                            value=get_code_content(),
+                        code_editor = gr.Code(
+                            scale=3,
+                            value=load_file("app.py"),
                             language="python",
-                            lines=20,
-                            wrap_lines=True,
-                            show_label=False,
+                            visible=True,
+                            interactive=True,
                         )
 
-        # Event handlers for Preview tab
-        msg_input_preview.submit(
-            simulate_ai_response,
-            inputs=[msg_input_preview, chatbot_preview],
-            outputs=[chatbot_preview, msg_input_preview],
+        file_explorer.change(fn=load_file, inputs=file_explorer, outputs=code_editor)
+        save_btn.click(
+            fn=save_file,
+            inputs=[file_explorer, code_editor],
+            outputs=[],
         )
 
-        send_btn_preview.click(
+        # Event handlers
+        msg_input.submit(
             simulate_ai_response,
-            inputs=[msg_input_preview, chatbot_preview],
-            outputs=[chatbot_preview, msg_input_preview],
+            inputs=[msg_input, chatbot],
+            outputs=[chatbot, msg_input],
         )
 
-        # Event handlers for Code tab
-        msg_input_code.submit(
+        send_btn.click(
             simulate_ai_response,
-            inputs=[msg_input_code, chatbot_code],
-            outputs=[chatbot_code, msg_input_code],
-        )
-
-        send_btn_code.click(
-            simulate_ai_response,
-            inputs=[msg_input_code, chatbot_code],
-            outputs=[chatbot_code, msg_input_code],
+            inputs=[msg_input, chatbot],
+            outputs=[chatbot, msg_input],
         )
 
     return demo
