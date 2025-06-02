@@ -2,6 +2,7 @@
 It's almost Lovable
 
 
+Build Gradio apps, using only a chat interface.
 ### Notes
 - UI - Chat, Preview, Code
 - Deploy directly to huggingface spaces
