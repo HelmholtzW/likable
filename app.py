@@ -1,27 +1,87 @@
-import random
-import time
-
 import gradio as gr
+
+from planning_agent import GradioPlanningAgent
+from settings import settings
 
 gr.NO_RELOAD = False
 
+# Initialize the planning agent globally
+planning_agent = None
 
-# Mock function to simulate AI responses
-def simulate_ai_response(message, history):
-    """Simulate an AI response for demonstration purposes"""
-    time.sleep(1)  # Simulate processing time
 
-    # Simple demo responses
-    responses = [
-        "I'll help you build that! Let me generate some code for you.",
-        "Great idea! I'm working on implementing that feature.",
-        "Here's what I can create for you based on your request.",
-        "Let me design that component and show you a preview.",
-        "I understand what you need. I'll code that up right now!",
-    ]
+def get_planning_agent():
+    """Get or initialize the planning agent (lazy loading)."""
+    global planning_agent
+    if planning_agent is None:
+        try:
+            planning_agent = GradioPlanningAgent()
+        except Exception as e:
+            print(f"Error initializing planning agent: {e}")
+            return None
+    return planning_agent
 
-    response = random.choice(responses)
-    history.append([message, response])
+
+# Enhanced AI response using the planning agent
+def ai_response_with_planning(message, history):
+    """Generate AI response using the planning agent for actual planning."""
+
+    agent = get_planning_agent()
+
+    if agent is None:
+        # Fallback to mock response if agent fails to initialize
+        response = (
+            "Sorry, the planning agent is not available. "
+            "Please check your API_KEY environment variable."
+        )
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": response})
+        return history, ""
+
+    try:
+        # Use the planning agent for actual planning
+        planning_result = agent.plan_application(message)
+
+        # Format the response with key insights
+        action_summary = (
+            planning_result.action_plan[:300] + "..."
+            if len(planning_result.action_plan) > 300
+            else planning_result.action_plan
+        )
+
+        components_list = chr(10).join(
+            [f"• {comp}" for comp in planning_result.gradio_components[:5]]
+        )
+        dependencies_list = chr(10).join(
+            [f"• {dep}" for dep in planning_result.dependencies[:5]]
+        )
+
+        response = f"""I'll help you plan that application! Here's what I've analyzed:
+
+**Complexity**: {planning_result.estimated_complexity}
+
+**Key Gradio Components Needed**:
+{components_list}
+
+**Dependencies Required**:
+{dependencies_list}
+
+**High-Level Action Plan**:
+{action_summary}
+
+I've created a comprehensive plan including implementation details and testing \
+strategy. Check the detailed view for the complete plan!"""
+
+        # Store the full planning result for later use
+        # You could save this to a session state or database
+
+    except Exception as e:
+        response = (
+            f"I encountered an error while planning: {str(e)}. "
+            "Let me try a simpler approach..."
+        )
+
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": response})
     return history, ""
 
 
@@ -120,7 +180,7 @@ def create_lovable_ui():
                             height=500,
                             show_copy_button=True,
                             avatar_images=(None, "🤖"),
-                            bubble_full_width=False,
+                            type="messages",
                         )
 
                         with gr.Row():
@@ -151,7 +211,7 @@ def create_lovable_ui():
                             height=500,
                             show_copy_button=True,
                             avatar_images=(None, "🤖"),
-                            bubble_full_width=False,
+                            type="messages",
                         )
 
                         with gr.Row():
@@ -181,26 +241,26 @@ def create_lovable_ui():
 
         # Event handlers for Preview tab
         msg_input_preview.submit(
-            simulate_ai_response,
+            ai_response_with_planning,
             inputs=[msg_input_preview, chatbot_preview],
             outputs=[chatbot_preview, msg_input_preview],
         )
 
         send_btn_preview.click(
-            simulate_ai_response,
+            ai_response_with_planning,
             inputs=[msg_input_preview, chatbot_preview],
             outputs=[chatbot_preview, msg_input_preview],
         )
 
         # Event handlers for Code tab
         msg_input_code.submit(
-            simulate_ai_response,
+            ai_response_with_planning,
             inputs=[msg_input_code, chatbot_code],
             outputs=[chatbot_code, msg_input_code],
         )
 
         send_btn_code.click(
-            simulate_ai_response,
+            ai_response_with_planning,
             inputs=[msg_input_code, chatbot_code],
             outputs=[chatbot_code, msg_input_code],
         )
@@ -210,4 +270,5 @@ def create_lovable_ui():
 
 if __name__ == "__main__":
     demo = create_lovable_ui()
-    demo.launch(debug=True)
+    gradio_config = settings.get_gradio_config()
+    demo.launch(**gradio_config)
