@@ -113,9 +113,9 @@ def create_lovable_ui():
         fill_width=True,
     ) as demo:
         gr.Markdown("# 💗Likable")
-        gr.Markdown(
-            "*It's almost Lovable - Build Gradio apps using only a chat interface*"
-        )
+        # gr.Markdown(
+        #     "*It's almost Lovable - Build Gradio apps using only a chat interface*"
+        # )
 
         with gr.Row(elem_classes="main-container"):
             # Left side - Chat Interface
