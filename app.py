@@ -121,10 +121,10 @@ def create_lovable_ui():
             # Left side - Chat Interface
             with gr.Column(scale=1, elem_classes="chat-container"):
                 chatbot = gr.Chatbot(
-                    height=500,
                     show_copy_button=True,
                     avatar_images=(None, "🤖"),
                     bubble_full_width=False,
+                    height="75vh",
                 )
 
                 with gr.Row():
@@ -162,8 +162,8 @@ def create_lovable_ui():
                             language="python",
                             visible=True,
                             interactive=True,
-                            lines=28,
-                            max_lines=28,
+                            # lines=27,
+                            # max_lines=27,
                             autocomplete=True,
                         )
 
