@@ -97,32 +97,18 @@ def create_lovable_ui():
     with gr.Blocks(
         title="💗Likable",
         theme=gr.themes.Soft(),
-        css="""
-        .main-container {
-            height: 100vh;
-        }
-        .chat-container {
-            height: 80vh;
-            border-right: 1px solid #e0e0e0;
-        }
-        .content-container {
-            height: 80vh;
-        }
-        """,
     ) as demo:
         gr.Markdown("# 💗Likable")
-        gr.Markdown(
-            "*It's almost Lovable - Build Gradio apps using only a chat interface*"
-        )
+        # gr.Markdown(
+        #     "*It's almost Lovable - Build Gradio apps using only a chat interface*"
+        # )
 
         with gr.Tabs():
             # Preview Tab
             with gr.TabItem("Preview"):
-                with gr.Row(elem_classes="main-container"):
+                with gr.Row(elem_classes="main-container", equal_height=True):
                     # Left side - Chat Interface
                     with gr.Column(scale=1, elem_classes="chat-container"):
-                        gr.Markdown("### 💬 Chat with AI")
-
                         chatbot_preview = gr.Chatbot(
                             height=500,
                             show_copy_button=True,
@@ -142,20 +128,18 @@ def create_lovable_ui():
 
                     # Right side - Preview Content
                     with gr.Column(scale=4, elem_classes="content-container"):
-                        with gr.Row():
-                            gr.Button(
-                                "Deploy to HF Spaces", variant="secondary", scale=1
-                            )
+                        # with gr.Row():
+                        #     gr.Button(
+                        #         "Deploy to HF Spaces", variant="secondary", scale=1
+                        #     )
 
                         preview_html = gr.HTML(value=get_preview_content())
 
             # Code Tab
             with gr.TabItem("Code"):
-                with gr.Row(elem_classes="main-container"):
+                with gr.Row(elem_classes="main-container", equal_height=True):
                     # Left side - Chat Interface
                     with gr.Column(scale=1, elem_classes="chat-container"):
-                        gr.Markdown("### 💬 Chat with AI")
-
                         chatbot_code = gr.Chatbot(
                             height=500,
                             show_copy_button=True,
@@ -175,10 +159,10 @@ def create_lovable_ui():
 
                     # Right side - Code Content
                     with gr.Column(scale=4, elem_classes="content-container"):
-                        with gr.Row():
-                            gr.Button(
-                                "Deploy to HF Spaces", variant="secondary", scale=1
-                            )
+                        # with gr.Row():
+                        #     gr.Button(
+                        #         "Deploy to HF Spaces", variant="secondary", scale=1
+                        #     )
 
                         code_view = gr.Code(
                             value=get_code_content(),
