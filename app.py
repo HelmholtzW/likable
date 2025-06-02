@@ -136,10 +136,7 @@ def create_lovable_ui():
                     send_btn = gr.Button("Send", scale=1, variant="primary")
 
             # Right side - Preview/Code Toggle
-            with gr.Column(
-                scale=4,
-                elem_classes="preview-container",
-            ):
+            with gr.Column(scale=4, elem_classes="preview-container"):
                 with gr.Tab("Preview"):
                     # Create a trigger for refreshing the preview
                     refresh_trigger = gr.State(value=0)
@@ -165,6 +162,9 @@ def create_lovable_ui():
                             language="python",
                             visible=True,
                             interactive=True,
+                            lines=28,
+                            max_lines=28,
+                            autocomplete=True,
                         )
 
         # Event handlers
