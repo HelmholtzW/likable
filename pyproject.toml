@@ -5,8 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "duckduckgo-search>=8.0.2",
     "gradio>=5.32.0",
-    "smolagents[litellm]>=1.17.0",
+    "mcp>=1.9.2",
+    "smolagents[litellm,mcp]>=1.17.0",
+    "selenium>=4.25.0",
+    "requests>=2.32.0",
 ]
 
 [dependency-groups]
@@ -36,3 +40,10 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.uv.workspace]
+members = [
+    "sandbox/gradio_app",
+    "sandbox/sandbox/gradio_app",
+    "test_sandbox/test_project",
+]

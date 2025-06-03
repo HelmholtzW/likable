@@ -4,13 +4,16 @@ import sys
 
 import gradio as gr
 
+from coding_agent import GradioCodingAgent
 from planning_agent import GradioPlanningAgent
 from settings import settings
+from utils import load_file
 
 gr.NO_RELOAD = False
 
-# Initialize the planning agent globally
+# Initialize the agents globally
 planning_agent = None
+coding_agent = None
 
 
 def get_planning_agent():
@@ -25,14 +28,28 @@ def get_planning_agent():
     return planning_agent
 
 
-# Enhanced AI response using the planning agent
-def ai_response_with_planning(message, history):
-    """Generate AI response using the planning agent for actual planning."""
+def get_coding_agent():
+    """Get or initialize the coding agent (lazy loading)."""
+    global coding_agent
+    if coding_agent is None:
+        try:
+            coding_agent = GradioCodingAgent()
+        except Exception as e:
+            print(f"Error initializing coding agent: {e}")
+            return None
+    return coding_agent
 
-    agent = get_planning_agent()
 
-    if agent is None:
-        # Fallback to mock response if agent fails to initialize
+# Enhanced AI response using both planning and coding agents
+def ai_response_with_planning_and_coding(message, history):
+    """Generate AI response using the planning agent for planning and \
+coding agent for implementation."""
+
+    planning_agent_instance = get_planning_agent()
+    coding_agent_instance = get_coding_agent()
+
+    if planning_agent_instance is None:
+        # Fallback to mock response if planning agent fails to initialize
         response = (
             "Sorry, the planning agent is not available. "
             "Please check your API_KEY environment variable."
@@ -41,11 +58,26 @@ def ai_response_with_planning(message, history):
         history.append({"role": "assistant", "content": response})
         return history, ""
 
-    try:
-        # Use the planning agent for actual planning
-        planning_result = agent.plan_application(message)
+    if coding_agent_instance is None:
+        # Fallback if coding agent fails to initialize
+        response = (
+            "Sorry, the coding agent is not available. "
+            "Planning is available but implementation will be limited."
+        )
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": response})
+        return history, ""
 
-        # Format the response with key insights
+    try:
+        # Step 1: Use the planning agent for planning
+        history.append({"role": "user", "content": message})
+        history.append(
+            {"role": "assistant", "content": "🎯 Starting to plan your application..."}
+        )
+
+        planning_result = planning_agent_instance.plan_application(message)
+
+        # Format the planning response
         action_summary = (
             planning_result.action_plan[:300] + "..."
             if len(planning_result.action_plan) > 300
@@ -59,7 +91,7 @@ def ai_response_with_planning(message, history):
             [f"• {dep}" for dep in planning_result.dependencies[:5]]
         )
 
-        response = f"""I'll help you plan that application! Here's what I've analyzed:
+        planning_response = f"""✅ **Planning Complete!**
 
 **Complexity**: {planning_result.estimated_complexity}
 
@@ -72,29 +104,68 @@ def ai_response_with_planning(message, history):
 **High-Level Action Plan**:
 {action_summary}
 
-I've created a comprehensive plan including implementation details and testing \
-strategy. Check the detailed view for the complete plan!"""
+🚀 **Now starting implementation...**"""
 
-        # Store the full planning result for later use
-        # You could save this to a session state or database
+        history.append({"role": "assistant", "content": planning_response})
 
-    except Exception as e:
-        response = (
-            f"I encountered an error while planning: {str(e)}. "
-            "Let me try a simpler approach..."
+        # Step 2: Use the coding agent for implementation
+        history.append(
+            {
+                "role": "assistant",
+                "content": "⚡ Implementing your application with proper \
+project structure...",
+            }
         )
 
-    history.append({"role": "user", "content": message})
-    history.append({"role": "assistant", "content": response})
+        coding_result = coding_agent_instance.iterative_implementation(planning_result)
+
+        # Format the implementation response
+        if coding_result.success:
+            implementation_response = f"""✅ **Implementation Complete!**
+
+**Project Created**: `{coding_result.project_path}`
+**Features Implemented**: {len(coding_result.implemented_features)} components
+**Status**: Ready to run!
+
+Your Gradio application has been created with:
+- Proper `uv` project structure
+- All required dependencies installed
+- Complete README.md with usage instructions
+- Functional app.py with all requested features
+
+You can view and test your app in the **Preview** tab, or check the code in \
+the **Code** tab.
+
+To run locally: `cd {coding_result.project_path} && uv run python app.py`"""
+
+            if coding_result.remaining_tasks:
+                implementation_response += f"\n\n**Remaining Tasks**: \
+{chr(10).join([f'• {task}' for task in coding_result.remaining_tasks])}"
+
+        else:
+            implementation_response = f"""⚠️ **Implementation Partially Complete**
+
+**Project Path**: `{coding_result.project_path}`
+**Issues Encountered**: {len(coding_result.error_messages)} errors
+
+**Error Messages**:
+{chr(10).join([f'• {error}' for error in coding_result.error_messages])}
+
+**Remaining Tasks**:
+{chr(10).join([f'• {task}' for task in coding_result.remaining_tasks])}
+
+The project structure has been set up, but some features may need manual completion."""
+
+        history.append({"role": "assistant", "content": implementation_response})
+
+    except Exception as e:
+        error_response = (
+            f"I encountered an error during planning and implementation: {str(e)}. "
+            "Let me try a simpler approach..."
+        )
+        history.append({"role": "assistant", "content": error_response})
+
     return history, ""
-
-
-def load_file(path):
-    if path is None:
-        return ""
-    # path is a string like "subdir/example.py"
-    with open(path, encoding="utf-8") as f:
-        return f.read()
 
 
 def save_file(path, new_text):
@@ -109,13 +180,15 @@ def save_file(path, new_text):
 
 
 def load_and_render_app():
-    """Load and render the Gradio app from sandbox/app.py"""
-    app_path = "sandbox/app.py"
+    """Load and render the Gradio app from sandbox/gradio_app/app.py"""
+    app_path = "sandbox/gradio_app/app.py"
 
     if not os.path.exists(app_path):
         return gr.HTML(
-            "<div style='padding: 20px; color: red;'>❌ No app.py found in \
-sandbox directory</div>"
+            """<div style='padding: 20px; color: red;'>
+    ❌ No app.py found in sandbox/gradio_app directory.
+    Create an application first using the chat interface.
+</div>"""
         )
 
     try:
@@ -127,9 +200,10 @@ sandbox directory</div>"
         spec = importlib.util.spec_from_loader("dynamic_app", loader=None)
         module = importlib.util.module_from_spec(spec)
 
-        # Add current directory to sys.path if not already there
-        if os.getcwd() not in sys.path:
-            sys.path.insert(0, os.getcwd())
+        # Add sandbox directory to sys.path if not already there
+        sandbox_path = os.path.abspath("sandbox/gradio_app")
+        if sandbox_path not in sys.path:
+            sys.path.insert(0, sandbox_path)
 
         # Execute the code in the module's namespace
         exec(app_code, module.__dict__)
@@ -153,8 +227,10 @@ sandbox directory</div>"
 
         if app_instance is None:
             return gr.HTML(
-                "<div style='padding: 20px; color: orange;'>⚠️ No Gradio app found. \
-Make sure your app.py creates a Gradio Blocks or Interface object.</div>"
+                """<div style='padding: 20px; color: orange;'>
+⚠️ No Gradio app found. Make sure your app.py creates a Gradio Blocks or \
+Interface object.
+</div>"""
             )
 
         # Return the app instance to be rendered
@@ -162,17 +238,17 @@ Make sure your app.py creates a Gradio Blocks or Interface object.</div>"
 
     except Exception as e:
         error_html = f"""
-        <div style='padding: 20px; color: red; font-family: monospace;'>
-            ❌ Error loading app:<br>
-            <pre style='background: #f5f5f5; padding: 10px; margin-top: 10px; \
+<div style='padding: 20px; color: red; font-family: monospace;'>
+    ❌ Error loading app:<br>
+    <pre style='background: #f5f5f5; padding: 10px; margin-top: 10px; \
 border-radius: 4px;'>{str(e)}</pre>
-        </div>
-        """
+</div>
+"""
         return gr.HTML(error_html)
 
 
-# Create the main Lovable-style UI
-def create_lovable_ui():
+# Create the main Likable UI
+def create_likable_ui():
     with gr.Blocks(
         title="💗Likable",
         theme=gr.themes.Soft(),
@@ -180,9 +256,10 @@ def create_lovable_ui():
         fill_width=True,
     ) as demo:
         gr.Markdown("# 💗Likable")
-        # gr.Markdown(
-        #     "*It's almost Lovable - Build Gradio apps using only a chat interface*"
-        # )
+        gr.Markdown(
+            "*AI-powered Gradio app builder - Plans and implements \
+complete applications*"
+        )
 
         with gr.Row(elem_classes="main-container"):
             # Left side - Chat Interface
@@ -190,17 +267,17 @@ def create_lovable_ui():
                 chatbot = gr.Chatbot(
                     show_copy_button=True,
                     avatar_images=(None, "🤖"),
-                    bubble_full_width=False,
+                    type="messages",
                     height="75vh",
                 )
 
                 with gr.Row():
                     msg_input = gr.Textbox(
-                        placeholder="Describe what you want to build...",
+                        placeholder="Describe the Gradio app you want to build...",
                         scale=4,
                         container=False,
                     )
-                    send_btn = gr.Button("Send", scale=1, variant="primary")
+                    send_btn = gr.Button("Build App", scale=1, variant="primary")
 
             # Right side - Preview/Code Toggle
             with gr.Column(scale=4, elem_classes="preview-container"):
@@ -225,12 +302,12 @@ def create_lovable_ui():
                         )
                         code_editor = gr.Code(
                             scale=3,
-                            value=load_file("sandbox/app.py"),
+                            value=load_file("sandbox/gradio_app/app.py")
+                            if os.path.exists("sandbox/gradio_app/app.py")
+                            else "# No app created yet - use the chat to create one!",
                             language="python",
                             visible=True,
                             interactive=True,
-                            # lines=27,
-                            # max_lines=27,
                             autocomplete=True,
                         )
 
@@ -248,15 +325,16 @@ def create_lovable_ui():
             outputs=[refresh_trigger],
         )
 
-        # Event handlers for chat
+        # Event handlers for chat - updated to use the combined planning and
+        # coding function
         msg_input.submit(
-            ai_response_with_planning,
+            ai_response_with_planning_and_coding,
             inputs=[msg_input, chatbot],
             outputs=[chatbot, msg_input],
         )
 
         send_btn.click(
-            ai_response_with_planning,
+            ai_response_with_planning_and_coding,
             inputs=[msg_input, chatbot],
             outputs=[chatbot, msg_input],
         )
@@ -265,6 +343,6 @@ def create_lovable_ui():
 
 
 if __name__ == "__main__":
-    demo = create_lovable_ui()
+    demo = create_likable_ui()
     gradio_config = settings.get_gradio_config()
     demo.launch(**gradio_config)

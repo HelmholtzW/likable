@@ -23,6 +23,16 @@ class Settings:
         self.api_base_url: str | None = os.getenv("API_BASE_URL")
         self.api_key: str | None = os.getenv("API_KEY")
 
+        # Coding Agent Settings
+        self.code_model_id: str = os.getenv("CODE_MODEL_ID", self.model_id)
+        self.coding_verbosity: int = int(os.getenv("CODING_VERBOSITY", "2"))
+        self.max_coding_steps: int = int(os.getenv("MAX_CODING_STEPS", "20"))
+
+        # Testing Agent Settings
+        self.test_model_id: str = os.getenv("TEST_MODEL_ID", self.model_id)
+        self.testing_verbosity: int = int(os.getenv("TESTING_VERBOSITY", "2"))
+        self.max_testing_steps: int = int(os.getenv("MAX_TESTING_STEPS", "15"))
+
         # Application Settings
         self.gradio_host: str = os.getenv("GRADIO_HOST", "127.0.0.1")
         self.gradio_port: int = int(os.getenv("GRADIO_PORT", "7860"))
@@ -40,7 +50,10 @@ class Settings:
 
         if not self.api_key:
             print("⚠️  Warning: API_KEY not set in environment variables.")
-            print("   The planning agent may not work without a valid API key.")
+            print(
+                "   The planning and coding agents may not work \
+without a valid API key."
+            )
             print("   Set it in your .env file or as an environment variable.")
             print()
 
@@ -52,9 +65,36 @@ in valid range [0, 1, 2]"
             print("   Using default value of 1")
             self.planning_verbosity = 1
 
+        if self.coding_verbosity not in [0, 1, 2]:
+            print(
+                f"⚠️  Warning: CODING_VERBOSITY={self.coding_verbosity} is not \
+in valid range [0, 1, 2]"
+            )
+            print("   Using default value of 2")
+            self.coding_verbosity = 2
+
+        if self.testing_verbosity not in [0, 1, 2]:
+            print(
+                f"⚠️  Warning: TESTING_VERBOSITY={self.testing_verbosity} is not \
+in valid range [0, 1, 2]"
+            )
+            print("   Using default value of 2")
+            self.testing_verbosity = 2
+
     def get_model_config(self) -> dict:
         """Get model configuration for the planning agent."""
         config = {"model_id": self.model_id, "api_key": self.api_key}
+
+        if self.api_base_url:
+            config["api_base_url"] = self.api_base_url
+        if self.api_key:
+            config["api_key"] = self.api_key
+
+        return config
+
+    def get_code_model_config(self) -> dict:
+        """Get model configuration for the coding agent."""
+        config = {"model_id": self.code_model_id, "api_key": self.api_key}
 
         if self.api_base_url:
             config["api_base_url"] = self.api_base_url
@@ -78,17 +118,48 @@ in valid range [0, 1, 2]"
             "max_steps": self.max_planning_steps,
         }
 
+    def get_coding_config(self) -> dict:
+        """Get coding agent configuration."""
+        return {
+            "verbosity_level": self.coding_verbosity,
+            "max_steps": self.max_coding_steps,
+        }
+
+    def get_test_model_config(self) -> dict:
+        """Get model configuration for the testing agent."""
+        config = {"model_id": self.test_model_id, "api_key": self.api_key}
+
+        if self.api_base_url:
+            config["api_base_url"] = self.api_base_url
+        if self.api_key:
+            config["api_key"] = self.api_key
+
+        return config
+
+    def get_testing_config(self) -> dict:
+        """Get testing agent configuration."""
+        return {
+            "verbosity_level": self.testing_verbosity,
+            "max_steps": self.max_testing_steps,
+        }
+
     def __repr__(self) -> str:
         """String representation of settings (excluding sensitive data)."""
         return f"""Settings(
     model_id='{self.model_id}',
+    code_model_id='{self.code_model_id}',
+    test_model_id='{self.test_model_id}',
     api_key={'***' if self.api_key else 'None'},
     api_base_url='{self.api_base_url}',
     gradio_host='{self.gradio_host}',
     gradio_port={self.gradio_port},
     gradio_debug={self.gradio_debug},
     planning_verbosity={self.planning_verbosity},
-    max_planning_steps={self.max_planning_steps}
+    max_planning_steps={self.max_planning_steps},
+    coding_verbosity={self.coding_verbosity},
+    max_coding_steps={self.max_coding_steps},
+    testing_verbosity={self.testing_verbosity},
+    max_testing_steps={self.max_testing_steps}
 )"""
 
 
@@ -115,8 +186,17 @@ if __name__ == "__main__":
     print("Model Config:")
     print(settings.get_model_config())
     print()
+    print("Code Model Config:")
+    print(settings.get_code_model_config())
+    print()
     print("Gradio Config:")
     print(settings.get_gradio_config())
     print()
     print("Planning Config:")
     print(settings.get_planning_config())
+    print()
+    print("Coding Config:")
+    print(settings.get_coding_config())
+    print()
+    print("Testing Config:")
+    print(settings.get_testing_config())

@@ -279,3 +279,5 @@ screenshots/
 *.bak
 *.backup
 *.old
+
+sandbox/
