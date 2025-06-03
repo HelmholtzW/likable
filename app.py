@@ -4,165 +4,35 @@ import sys
 
 import gradio as gr
 
-from coding_agent import GradioCodingAgent
-from planning_agent import GradioPlanningAgent
+from manager_agent import GradioManagerAgent
 from settings import settings
 from utils import load_file
 
 gr.NO_RELOAD = False
 
-# Initialize the agents globally
-planning_agent = None
-coding_agent = None
 
-
-def get_planning_agent():
-    """Get or initialize the planning agent (lazy loading)."""
-    global planning_agent
-    if planning_agent is None:
-        try:
-            planning_agent = GradioPlanningAgent()
-        except Exception as e:
-            print(f"Error initializing planning agent: {e}")
-            return None
-    return planning_agent
-
-
-def get_coding_agent():
-    """Get or initialize the coding agent (lazy loading)."""
-    global coding_agent
-    if coding_agent is None:
-        try:
-            coding_agent = GradioCodingAgent()
-        except Exception as e:
-            print(f"Error initializing coding agent: {e}")
-            return None
-    return coding_agent
-
-
-# Enhanced AI response using both planning and coding agents
-def ai_response_with_planning_and_coding(message, history):
-    """Generate AI response using the planning agent for planning and \
+def generate_ai_response(message, history):
+    """Generate AI response using the manager agent for planning and \
 coding agent for implementation."""
 
-    planning_agent_instance = get_planning_agent()
-    coding_agent_instance = get_coding_agent()
+    history.append({"role": "user", "content": message})
+    manager_agent_instance = GradioManagerAgent()
 
-    if planning_agent_instance is None:
+    if manager_agent_instance is None:
         # Fallback to mock response if planning agent fails to initialize
         response = (
-            "Sorry, the planning agent is not available. "
+            "Sorry, the manager agent is not available. "
             "Please check your API_KEY environment variable."
         )
-        history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": response})
-        return history, ""
-
-    if coding_agent_instance is None:
-        # Fallback if coding agent fails to initialize
-        response = (
-            "Sorry, the coding agent is not available. "
-            "Planning is available but implementation will be limited."
-        )
-        history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": response})
         return history, ""
 
     try:
-        # Step 1: Use the planning agent for planning
-        history.append({"role": "user", "content": message})
-        history.append(
-            {"role": "assistant", "content": "🎯 Starting to plan your application..."}
-        )
-
-        planning_result = planning_agent_instance.plan_application(message)
-
-        # Format the planning response
-        action_summary = (
-            planning_result.action_plan[:300] + "..."
-            if len(planning_result.action_plan) > 300
-            else planning_result.action_plan
-        )
-
-        components_list = chr(10).join(
-            [f"• {comp}" for comp in planning_result.gradio_components[:5]]
-        )
-        dependencies_list = chr(10).join(
-            [f"• {dep}" for dep in planning_result.dependencies[:5]]
-        )
-
-        planning_response = f"""✅ **Planning Complete!**
-
-**Complexity**: {planning_result.estimated_complexity}
-
-**Key Gradio Components Needed**:
-{components_list}
-
-**Dependencies Required**:
-{dependencies_list}
-
-**High-Level Action Plan**:
-{action_summary}
-
-🚀 **Now starting implementation...**"""
-
-        history.append({"role": "assistant", "content": planning_response})
-
-        # Step 2: Use the coding agent for implementation
-        history.append(
-            {
-                "role": "assistant",
-                "content": "⚡ Implementing your application with proper \
-project structure...",
-            }
-        )
-
-        coding_result = coding_agent_instance.iterative_implementation(planning_result)
-
-        # Format the implementation response
-        if coding_result.success:
-            implementation_response = f"""✅ **Implementation Complete!**
-
-**Project Created**: `{coding_result.project_path}`
-**Features Implemented**: {len(coding_result.implemented_features)} components
-**Status**: Ready to run!
-
-Your Gradio application has been created with:
-- Proper `uv` project structure
-- All required dependencies installed
-- Complete README.md with usage instructions
-- Functional app.py with all requested features
-
-You can view and test your app in the **Preview** tab, or check the code in \
-the **Code** tab.
-
-To run locally: `cd {coding_result.project_path} && uv run python app.py`"""
-
-            if coding_result.remaining_tasks:
-                implementation_response += f"\n\n**Remaining Tasks**: \
-{chr(10).join([f'• {task}' for task in coding_result.remaining_tasks])}"
-
-        else:
-            implementation_response = f"""⚠️ **Implementation Partially Complete**
-
-**Project Path**: `{coding_result.project_path}`
-**Issues Encountered**: {len(coding_result.error_messages)} errors
-
-**Error Messages**:
-{chr(10).join([f'• {error}' for error in coding_result.error_messages])}
-
-**Remaining Tasks**:
-{chr(10).join([f'• {task}' for task in coding_result.remaining_tasks])}
-
-The project structure has been set up, but some features may need manual completion."""
-
-        history.append({"role": "assistant", "content": implementation_response})
+        manager_result = manager_agent_instance(message)
+        history.append({"role": "assistant", "content": manager_result})
 
     except Exception as e:
-        error_response = (
-            f"I encountered an error during planning and implementation: {str(e)}. "
-            "Let me try a simpler approach..."
-        )
+        error_response = f"I encountered an error: {str(e)}"
         history.append({"role": "assistant", "content": error_response})
 
     return history, ""
@@ -328,13 +198,13 @@ complete applications*"
         # Event handlers for chat - updated to use the combined planning and
         # coding function
         msg_input.submit(
-            ai_response_with_planning_and_coding,
+            generate_ai_response,
             inputs=[msg_input, chatbot],
             outputs=[chatbot, msg_input],
         )
 
         send_btn.click(
-            ai_response_with_planning_and_coding,
+            generate_ai_response,
             inputs=[msg_input, chatbot],
             outputs=[chatbot, msg_input],
         )

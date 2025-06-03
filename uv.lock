@@ -8,7 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "gradio-app",
+    "gradio-calculator",
     "likable",
 ]
 
@@ -428,9 +428,9 @@ wheels = [
 ]
 
 [[package]]
-name = "gradio-app"
+name = "gradio-calculator"
 version = "0.1.0"
-source = { virtual = "sandbox/gradio_app" }
+source = { virtual = "sandbox/gradio_calculator" }
 dependencies = [
     { name = "gradio" },
 ]

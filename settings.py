@@ -23,6 +23,11 @@ class Settings:
         self.api_base_url: str | None = os.getenv("API_BASE_URL")
         self.api_key: str | None = os.getenv("API_KEY")
 
+        # Manager Agent Settings
+        self.manager_model_id: str = os.getenv("MANAGER_MODEL_ID", self.model_id)
+        self.manager_verbosity: int = int(os.getenv("MANAGER_VERBOSITY", "1"))
+        self.max_manager_steps: int = int(os.getenv("MAX_MANAGER_STEPS", "15"))
+
         # Coding Agent Settings
         self.code_model_id: str = os.getenv("CODE_MODEL_ID", self.model_id)
         self.coding_verbosity: int = int(os.getenv("CODING_VERBOSITY", "2"))
@@ -56,6 +61,14 @@ without a valid API key."
             )
             print("   Set it in your .env file or as an environment variable.")
             print()
+
+        if self.manager_verbosity not in [0, 1, 2]:
+            print(
+                f"⚠️  Warning: MANAGER_VERBOSITY={self.manager_verbosity} is not \
+in valid range [0, 1, 2]"
+            )
+            print("   Using default value of 1")
+            self.manager_verbosity = 1
 
         if self.planning_verbosity not in [0, 1, 2]:
             print(
@@ -92,6 +105,17 @@ in valid range [0, 1, 2]"
 
         return config
 
+    def get_manager_model_config(self) -> dict:
+        """Get model configuration for the manager agent."""
+        config = {"model_id": self.manager_model_id, "api_key": self.api_key}
+
+        if self.api_base_url:
+            config["api_base_url"] = self.api_base_url
+        if self.api_key:
+            config["api_key"] = self.api_key
+
+        return config
+
     def get_code_model_config(self) -> dict:
         """Get model configuration for the coding agent."""
         config = {"model_id": self.code_model_id, "api_key": self.api_key}
@@ -109,6 +133,13 @@ in valid range [0, 1, 2]"
             "server_name": self.gradio_host,
             "server_port": self.gradio_port,
             "debug": self.gradio_debug,
+        }
+
+    def get_manager_config(self) -> dict:
+        """Get manager agent configuration."""
+        return {
+            "verbosity_level": self.manager_verbosity,
+            "max_steps": self.max_manager_steps,
         }
 
     def get_planning_config(self) -> dict:
@@ -147,6 +178,7 @@ in valid range [0, 1, 2]"
         """String representation of settings (excluding sensitive data)."""
         return f"""Settings(
     model_id='{self.model_id}',
+    manager_model_id='{self.manager_model_id}',
     code_model_id='{self.code_model_id}',
     test_model_id='{self.test_model_id}',
     api_key={'***' if self.api_key else 'None'},
@@ -154,6 +186,8 @@ in valid range [0, 1, 2]"
     gradio_host='{self.gradio_host}',
     gradio_port={self.gradio_port},
     gradio_debug={self.gradio_debug},
+    manager_verbosity={self.manager_verbosity},
+    max_manager_steps={self.max_manager_steps},
     planning_verbosity={self.planning_verbosity},
     max_planning_steps={self.max_planning_steps},
     coding_verbosity={self.coding_verbosity},
@@ -186,11 +220,17 @@ if __name__ == "__main__":
     print("Model Config:")
     print(settings.get_model_config())
     print()
+    print("Manager Model Config:")
+    print(settings.get_manager_model_config())
+    print()
     print("Code Model Config:")
     print(settings.get_code_model_config())
     print()
     print("Gradio Config:")
     print(settings.get_gradio_config())
+    print()
+    print("Manager Config:")
+    print(settings.get_manager_config())
     print()
     print("Planning Config:")
     print(settings.get_planning_config())

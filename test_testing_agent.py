@@ -16,7 +16,6 @@ from testing_agent import (
     GradioTestingAgent,
     TestingResult,
     check_app_health,
-    create_gradio_testing_agent,
     run_gradio_app,
     setup_venv_with_uv,
     stop_gradio_processes,
@@ -263,21 +262,6 @@ class TestGradioTestingAgent(unittest.TestCase):
         self.assertIn("✅ Launch", report)
         self.assertIn("✅ UI", report)
         self.assertIn("/tmp/test.png", report)
-
-
-class TestTestingAgentFactory(unittest.TestCase):
-    """Test the factory function for creating testing agents."""
-
-    @patch("testing_agent.GradioTestingAgent")
-    def test_create_gradio_testing_agent(self, mock_agent_class):
-        """Test creating a testing agent with factory function."""
-        mock_agent = Mock()
-        mock_agent_class.return_value = mock_agent
-
-        agent = create_gradio_testing_agent()
-
-        self.assertEqual(agent, mock_agent)
-        mock_agent_class.assert_called_once_with()
 
 
 if __name__ == "__main__":

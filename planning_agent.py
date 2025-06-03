@@ -7,23 +7,9 @@ This module provides a specialized planning agent that can:
 - Return an action, implementation and testing plan
 """
 
-from dataclasses import dataclass
-
-from smolagents import LiteLLMModel
+from smolagents import LiteLLMModel, ToolCallingAgent
 
 from settings import settings
-
-
-@dataclass
-class PlanningResult:
-    """Result of the planning agent containing structured plans."""
-
-    action_plan: str
-    implementation_plan: str
-    testing_plan: str
-    gradio_components: list[str]
-    estimated_complexity: str
-    dependencies: list[str]
 
 
 class GradioPlanningAgent:
@@ -50,6 +36,24 @@ class GradioPlanningAgent:
             api_key: API key (uses settings if None)
             verbosity_level: Level of verbosity for agent output (uses settings if None)
         """
+        self.name = "planning_agent"
+        self.description = """Expert software architect specializing in Gradio \
+application planning.
+
+This agent creates comprehensive, detailed plans for building Gradio applications \
+based on user requirements.
+It provides:
+    - High-level action plans breaking down the implementation steps
+    - Detailed technical implementation plans using Python and Gradio
+    - Comprehensive testing strategies
+    - Analysis of required Gradio components and dependencies
+    - Complexity estimation for the project
+
+The agent focuses purely on planning and architecture - no actual code \
+implementation.
+Perfect for getting structured, well-thought-out plans before development \
+begins."""
+
         # Use settings as defaults, but allow override
         self.model_id = model_id or settings.model_id
         self.api_base_url = api_base_url or settings.api_base_url
@@ -63,7 +67,15 @@ class GradioPlanningAgent:
             api_key=self.api_key,
         )
 
-        self.planning_prompt = """You are an expert software architect and Gradio \
+        self.agent = ToolCallingAgent(
+            model=self.model,
+            tools=[],
+            verbosity_level=verbosity_level,
+            name=self.name,
+            description=self.description,
+        )
+
+        self.system_prompt = """You are an expert software architect and Gradio \
 application developer. Your role is to create comprehensive, detailed plans \
 for building Gradio applications based on user requirements.
 
@@ -110,168 +122,32 @@ Be thorough, practical, and consider real-world constraints. Focus on creating \
 maintainable, user-friendly Gradio applications. Remember: NO CODE IMPLEMENTATION \
 at this stage - only architectural planning and structural design."""
 
-    def plan_application(self, prompt: str) -> PlanningResult:
+    def __call__(self, task: str, **kwargs) -> str:
         """
-        Create a comprehensive plan for a Gradio application based on the prompt.
+        Handle planning tasks as a managed agent.
 
         Args:
-            prompt: Natural language description of the program to build
+            task: The user's description of the application to build
+            **kwargs: Additional keyword arguments (ignored)
 
         Returns:
-            PlanningResult containing structured plans
+            String response containing the formatted planning result
         """
+        full_prompt = f"""{self.system_prompt}
 
-        # Enhanced prompt for the agent
-        user_prompt = f"""
 Create a comprehensive plan for building the following Gradio application:
 
-{prompt}
+{task}
 
 Please provide detailed ACTION, IMPLEMENTATION, and TESTING plans following the \
 specified format. Consider all aspects of the application including UI/UX, \
-functionality, error handling, and deployment.
-"""
+functionality, error handling, and deployment. /no_think"""
 
-        messages = [
-            {"role": "system", "content": self.planning_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-        response = self.model.generate(messages)
+        try:
+            return self.agent.run(full_prompt)
 
-        # Parse the response into structured result
-        return self._parse_planning_response(response.content)
-
-    def _parse_planning_response(self, response: str) -> PlanningResult:
-        """
-        Parse the agent's response into a structured PlanningResult.
-
-        Args:
-            response: Raw response from the planning agent
-
-        Returns:
-            Structured PlanningResult
-        """
-
-        # Initialize default values
-        action_plan = ""
-        implementation_plan = ""
-        testing_plan = ""
-        gradio_components = []
-        estimated_complexity = "Medium"
-        dependencies = ["gradio"]
-
-        # Parse sections from the response
-        sections = self._extract_sections(response)
-
-        action_plan = sections.get("ACTION PLAN", "")
-        implementation_plan = sections.get("IMPLEMENTATION PLAN", "")
-        testing_plan = sections.get("TESTING PLAN", "")
-
-        # Parse gradio components list
-        components_text = sections.get("GRADIO COMPONENTS", "")
-        if components_text:
-            gradio_components = self._extract_list_items(components_text)
-
-        # Parse complexity
-        complexity_text = sections.get("ESTIMATED COMPLEXITY", "")
-        if complexity_text:
-            estimated_complexity = complexity_text.strip()
-
-        # Parse dependencies
-        deps_text = sections.get("DEPENDENCIES", "")
-        if deps_text:
-            dependencies = ["gradio"] + self._extract_list_items(deps_text)
-            # Remove duplicates while preserving order
-            dependencies = list(dict.fromkeys(dependencies))
-
-        return PlanningResult(
-            action_plan=action_plan,
-            implementation_plan=implementation_plan,
-            testing_plan=testing_plan,
-            gradio_components=gradio_components,
-            estimated_complexity=estimated_complexity,
-            dependencies=dependencies,
-        )
-
-    def _extract_sections(self, text: str) -> dict[str, str]:
-        """Extract sections from markdown-formatted text."""
-        sections = {}
-        current_section = None
-        current_content = []
-
-        for line in text.split("\n"):
-            line = line.strip()
-
-            # Check if line is a section header
-            if line.startswith("## "):
-                # Save previous section if exists
-                if current_section and current_content:
-                    sections[current_section] = "\n".join(current_content).strip()
-
-                # Start new section
-                current_section = line[3:].strip()
-                current_content = []
-            elif current_section:
-                current_content.append(line)
-
-        # Save last section
-        if current_section and current_content:
-            sections[current_section] = "\n".join(current_content).strip()
-
-        return sections
-
-    def _extract_list_items(self, text: str) -> list[str]:
-        """Extract list items from text (handles bullet points, numbered lists, etc.)"""
-        items = []
-        for line in text.split("\n"):
-            line = line.strip()
-            if line:
-                # Remove common list prefixes
-                if line.startswith("- "):
-                    line = line[2:].strip()
-                elif line.startswith("* "):
-                    line = line[2:].strip()
-                elif ". " in line and line.split(".")[0].isdigit():
-                    line = line.split(".", 1)[1].strip()
-
-                if line:
-                    items.append(line)
-
-        return items
-
-    def format_plan_as_markdown(self, result: PlanningResult) -> str:
-        """
-        Format the planning result as a well-structured markdown document.
-
-        Args:
-            result: PlanningResult to format
-
-        Returns:
-            Markdown-formatted string
-        """
-
-        markdown = f"""# Gradio Application Plan
-
-## 📋 Action Plan
-{result.action_plan}
-
-## 🔧 Implementation Plan
-{result.implementation_plan}
-
-## 🧪 Testing Plan
-{result.testing_plan}
-
-## 🎨 Gradio Components
-{chr(10).join([f"- {component}" for component in result.gradio_components])}
-
-## ⚡ Estimated Complexity
-{result.estimated_complexity}
-
-## 📦 Dependencies
-{chr(10).join([f"- {dep}" for dep in result.dependencies])}
-"""
-
-        return markdown
+        except Exception as e:
+            return f"❌ Planning failed: {str(e)}"
 
 
 # Example usage and testing
@@ -280,9 +156,9 @@ if __name__ == "__main__":
     agent = GradioPlanningAgent()
 
     # Test with a simple calculator example
-    result = agent.plan_application(
+    result = agent(
         "Write a simple calculator app that can perform basic arithmetic operations"
     )
 
     print("=== PLANNING RESULT ===")
-    print(agent.format_plan_as_markdown(result))
+    print(result)
