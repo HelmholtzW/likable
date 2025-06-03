@@ -66,4 +66,5 @@ with gr.Blocks(title="Simple To-Do List", theme=gr.themes.Monochrome()) as app:
     delete_btn.click(delete_task, inputs=[task_index], outputs=[task_display])
 
 if __name__ == "__main__":
-    app.launch()
+    # Never change this port, otherwise the preview app will not work
+    app.launch(server_name="0.0.0.0", server_port=7861)
