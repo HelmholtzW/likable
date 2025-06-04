@@ -4,6 +4,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import gradio as gr
 import requests
@@ -17,6 +18,26 @@ gr.NO_RELOAD = False
 preview_process = None
 PREVIEW_PORT = 7861  # Different port from main app
 PREVIEW_URL = f"http://localhost:{PREVIEW_PORT}"
+
+
+def find_app_py_in_sandbox():
+    """Find app.py file in sandbox folder and its subfolders."""
+    sandbox_path = Path("sandbox")
+
+    if not sandbox_path.exists():
+        return None
+
+    # Search for app.py files recursively
+    app_files = list(sandbox_path.rglob("app.py"))
+
+    if not app_files:
+        return None
+
+    # If multiple app.py files exist, throw an error
+    if len(app_files) > 1:
+        raise ValueError("Multiple app.py files found in sandbox directory")
+
+    return str(app_files[0])
 
 
 def generate_ai_response(message, history):
@@ -82,10 +103,10 @@ def start_preview_app():
     # Stop any existing preview app
     stop_preview_app()
 
-    app_path = "sandbox/app.py"
+    app_path = find_app_py_in_sandbox()
 
-    if not os.path.exists(app_path):
-        return False, "No app.py found in sandbox directory"
+    if not app_path or not os.path.exists(app_path):
+        return False, "No app.py found in sandbox directory or its subfolders"
 
     try:
         # Start the subprocess to run the sandbox app
@@ -131,9 +152,9 @@ def start_preview_app():
 
 def create_iframe_preview():
     """Create an iframe HTML element for the preview."""
-    app_path = "sandbox/app.py"
+    app_path = find_app_py_in_sandbox()
 
-    if not os.path.exists(app_path):
+    if not app_path or not os.path.exists(app_path):
         return """
         <div style='padding: 20px; text-align: center; color: #666;'>
             <h3>❌ No app.py found</h3>
@@ -244,11 +265,17 @@ complete applications*"
                             value="app.py",
                             root_dir="sandbox",
                         )
+
+                        # Get initial code content dynamically
+                        def get_initial_code():
+                            app_path = find_app_py_in_sandbox()
+                            if app_path and os.path.exists(app_path):
+                                return load_file(app_path)
+                            return "# No app created yet - use the chat to create one!"
+
                         code_editor = gr.Code(
                             scale=3,
-                            value=load_file("sandbox/gradio_app/app.py")
-                            if os.path.exists("sandbox/gradio_app/app.py")
-                            else "# No app created yet - use the chat to create one!",
+                            value=get_initial_code(),
                             language="python",
                             visible=True,
                             interactive=True,

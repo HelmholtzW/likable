@@ -48,4 +48,6 @@ members = [
     "test_sandbox/test_project",
     "sandbox/calculator_app",
     "sandbox/gradio_calculator",
+    "sandbox/gradio_calculator_app",
+    "sandbox/simple_calculator",
 ]

@@ -18,7 +18,6 @@ The manager follows this workflow:
 from smolagents import CodeAgent, LiteLLMModel
 
 from coding_agent import GradioCodingAgent
-from planning_agent import GradioPlanningAgent
 from settings import settings
 from testing_agent import GradioTestingAgent
 
@@ -80,7 +79,7 @@ Provides comprehensive workflow management and detailed progress reporting."""
         )
 
         # Create managed agent instances
-        self.planning_agent = GradioPlanningAgent()
+        # self.planning_agent = GradioPlanningAgent()
         self.coding_agent = GradioCodingAgent()
         self.testing_agent = GradioTestingAgent()
 
@@ -89,7 +88,7 @@ Provides comprehensive workflow management and detailed progress reporting."""
             model=self.model,
             tools=[],  # No tools needed, only managed agents
             managed_agents=[
-                self.planning_agent,
+                # self.planning_agent,
                 self.coding_agent,
                 self.testing_agent,
             ],
@@ -110,55 +109,27 @@ Provides comprehensive workflow management and detailed progress reporting."""
         Returns:
             String response containing the formatted workflow result
         """
-        try:
-            # Run the development workflow
-            result = self.develop_application(task)
-
-            # Format the result for managed agent workflow
-            return self.format_result_as_markdown(result)
-
-        except Exception as e:
-            return f"❌ Development workflow failed: {str(e)}"
-
-    def develop_application(self, prompt: str) -> str:
-        """
-        Manage the full development workflow from planning to testing.
-
-        Args:
-            prompt: User's description of the application to build
-
-        Returns:
-            String containing the complete workflow results
-        """
-        try:
-            # Create comprehensive task for the manager workflow
-            manager_task = f"""You are a development manager coordinating a \
+        manager_task = f"""You are a development manager coordinating a \
 team of specialists to build a Gradio application.
 
-The user wants: {prompt}
+The user wants: {task}
 
 Please coordinate the following workflow:
 
-1. **PLANNING PHASE**: Call the planning_agent to create a comprehensive \
-plan for this application
-2. **IMPLEMENTATION PHASE**: Call the coding_agent with the planning results \
+1. **IMPLEMENTATION PHASE**: Call the coding_agent with the planning results \
 to implement the application
-3. **TESTING PHASE**: Call the testing_agent with the implementation results \
+2. **TESTING PHASE**: Call the testing_agent with the implementation results \
 to test the application
-4. **ITERATION**: If testing fails, call the coding_agent again with the \
+3. **ITERATION**: If testing fails, call the coding_agent again with the \
 error details to fix issues
-5. **COMPLETION**: Continue until testing passes or maximum iterations reached
+4. **COMPLETION**: Continue until testing passes or maximum iterations reached
 
-Start by calling the planning_agent with the user's request."""
-
-            # Run the coordinated workflow
-            result = self.agent.run(manager_task)
-
-            # Return successful result with agent's response
-            return str(result)
+Start by calling the coding_agent with the user's request."""
+        try:
+            return self.agent.run(manager_task)
 
         except Exception as e:
-            return f"Manager workflow failed: {str(e)}"
+            return f"❌ Development workflow failed: {str(e)}"
 
 
 if __name__ == "__main__":
