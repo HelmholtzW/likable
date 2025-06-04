@@ -22,7 +22,7 @@ from settings import settings
 from testing_agent import GradioTestingAgent
 
 
-class GradioManagerAgent:
+class GradioManagerAgent(CodeAgent):
     """
     A manager agent that orchestrates the planning, coding, and testing workflow.
 
@@ -64,18 +64,18 @@ and tested.
 Provides comprehensive workflow management and detailed progress reporting."""
 
         # Use settings as defaults, but allow override
-        self.model_id = model_id or settings.manager_model_id
-        self.api_base_url = api_base_url or settings.api_base_url
-        self.api_key = api_key or settings.api_key
+        model_id = model_id or settings.manager_model_id
+        api_base_url = api_base_url or settings.api_base_url
+        api_key = api_key or settings.api_key
         verbosity_level = verbosity_level or settings.manager_verbosity
         max_steps = max_steps or settings.max_manager_steps
         self.max_iterations = max_iterations
 
         # Initialize the language model
-        self.model = LiteLLMModel(
-            model_id=self.model_id,
-            api_base=self.api_base_url,
-            api_key=self.api_key,
+        model = LiteLLMModel(
+            model_id=model_id,
+            api_base=api_base_url,
+            api_key=api_key,
         )
 
         # Create managed agent instances
@@ -83,9 +83,9 @@ Provides comprehensive workflow management and detailed progress reporting."""
         self.coding_agent = GradioCodingAgent()
         self.testing_agent = GradioTestingAgent()
 
-        # Initialize the main ToolCallingAgent with the managed agents
-        self.agent = CodeAgent(
-            model=self.model,
+        # Initialize the parent CodeAgent with the managed agents
+        super().__init__(
+            model=model,
             tools=[],  # No tools needed, only managed agents
             managed_agents=[
                 # self.planning_agent,
@@ -98,13 +98,13 @@ Provides comprehensive workflow management and detailed progress reporting."""
             description=self.description,
         )
 
-    def __call__(self, task: str, **kwargs) -> str:
+    def run(self, task: str, **kwargs) -> str:
         """
-        Handle development management tasks as a managed agent.
+        Handle development management tasks by running the inherited agent functionality.
 
         Args:
             task: The user's description of the application to build
-            **kwargs: Additional keyword arguments (ignored)
+            **kwargs: Additional keyword arguments passed to parent run method
 
         Returns:
             String response containing the formatted workflow result
@@ -125,11 +125,24 @@ error details to fix issues
 4. **COMPLETION**: Continue until testing passes or maximum iterations reached
 
 Start by calling the coding_agent with the user's request."""
-        try:
-            return self.agent.run(manager_task)
 
+        try:
+            return super().run(manager_task, **kwargs)
         except Exception as e:
             return f"❌ Development workflow failed: {str(e)}"
+
+    def __call__(self, task: str, **kwargs) -> str:
+        """
+        Handle development management tasks as a managed agent (backward compatibility).
+
+        Args:
+            task: The user's description of the application to build
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            String response containing the formatted workflow result
+        """
+        return self.run(task, **kwargs)
 
 
 if __name__ == "__main__":
