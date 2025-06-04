@@ -405,7 +405,8 @@ class GradioUI:
 
 
 if __name__ == "__main__":
-    from kiss_agent import KISSAgent
+    from kiss_agent import KISSAgent, test_app_py
 
+    # t = test_app_py()
     agent = KISSAgent()
     GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7862)
