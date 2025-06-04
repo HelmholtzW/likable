@@ -11,6 +11,7 @@ dependencies = [
     "smolagents[litellm,mcp]>=1.17.0",
     "selenium>=4.25.0",
     "requests>=2.32.0",
+    "watchdog>=5.0.0",
 ]
 
 [dependency-groups]
@@ -49,5 +50,5 @@ members = [
     "sandbox/calculator_app",
     "sandbox/gradio_calculator",
     "sandbox/gradio_calculator_app",
-    "sandbox/simple_calculator",
+    "sandbox/simple_calculator", "sandbox/todo_list_app", "sandbox/calculator", "sandbox/todo_app", "sandbox/gradio_todo_app", "sandbox/gradio_hello_world", "sandbox/sandbox/todo-app", "sandbox/to_do_list_app", "sandbox/sandbox/to-do-app", "sandbox/todo_gradio_app", "sandbox/sandbox/to-do-list", "sandbox/sandbox/calculator",
 ]

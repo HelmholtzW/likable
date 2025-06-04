@@ -1,6 +1,4 @@
-import atexit
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -8,15 +6,14 @@ from pathlib import Path
 
 import gradio as gr
 import requests
+from smolagents.agents import MultiStepAgent
+from smolagents.gradio_ui import stream_to_gradio
 
-from manager_agent import GradioManagerAgent
-from utils import load_file
+# from src.manager_agent import GradioManagerAgent
+from src.utils import load_file
 
-gr.NO_RELOAD = False
-
-# Global variables for managing the preview app subprocess
 preview_process = None
-PREVIEW_PORT = 7861  # Different port from main app
+PREVIEW_PORT = 7860  # Different port from main app
 PREVIEW_URL = f"http://localhost:{PREVIEW_PORT}"
 
 
@@ -38,33 +35,6 @@ def find_app_py_in_sandbox():
         raise ValueError("Multiple app.py files found in sandbox directory")
 
     return str(app_files[0])
-
-
-def generate_ai_response(message, history):
-    """Generate AI response using the manager agent for planning and \
-coding agent for implementation."""
-
-    history.append({"role": "user", "content": message})
-    manager_agent_instance = GradioManagerAgent()
-
-    if manager_agent_instance is None:
-        # Fallback to mock response if planning agent fails to initialize
-        response = (
-            "Sorry, the manager agent is not available. "
-            "Please check your API_KEY environment variable."
-        )
-        history.append({"role": "assistant", "content": response})
-        return history, ""
-
-    try:
-        manager_result = manager_agent_instance(message)
-        history.append({"role": "assistant", "content": manager_result})
-
-    except Exception as e:
-        error_response = f"I encountered an error: {str(e)}"
-        history.append({"role": "assistant", "content": error_response})
-
-    return history, ""
 
 
 def save_file(path, new_text):
@@ -152,16 +122,6 @@ def start_preview_app():
 
 def create_iframe_preview():
     """Create an iframe HTML element for the preview."""
-    app_path = find_app_py_in_sandbox()
-
-    if not app_path or not os.path.exists(app_path):
-        return """
-        <div style='padding: 20px; text-align: center; color: #666;'>
-            <h3>❌ No app.py found</h3>
-            <p>Create an app.py file in the sandbox directory to see the preview.</p>
-        </div>
-        """
-
     # Start the preview app
     success, message = start_preview_app()
 
@@ -216,134 +176,225 @@ def ensure_preview_running():
         start_preview_app()
 
 
-# Create the main Likable UI
-def create_likable_ui():
-    with gr.Blocks(
-        title="💗Likable",
-        theme=gr.themes.Soft(),
-        fill_height=True,
-        fill_width=True,
-    ) as demo:
-        gr.Markdown("# 💗Likable")
-        gr.Markdown(
-            "*AI-powered Gradio app builder - Plans and implements \
-complete applications*"
+class GradioUI:
+    """A one-line interface to launch your agent in Gradio"""
+
+    def __init__(self, agent: MultiStepAgent):
+        self.agent = agent
+
+    def interact_with_agent(self, prompt, messages, session_state):
+        import gradio as gr
+
+        # Get the agent type from the template agent
+        if "agent" not in session_state:
+            session_state["agent"] = self.agent
+
+        try:
+            messages.append(
+                gr.ChatMessage(role="user", content=prompt, metadata={"status": "done"})
+            )
+            yield messages
+
+            for msg in stream_to_gradio(
+                session_state["agent"], task=prompt, reset_agent_memory=False
+            ):
+                if isinstance(msg, gr.ChatMessage):
+                    messages[-1].metadata["status"] = "done"
+                    messages.append(msg)
+                elif isinstance(msg, str):  # Then it's only a completion delta
+                    msg = msg.replace("<", r"\<").replace(
+                        ">", r"\>"
+                    )  # HTML tags seem to break Gradio Chatbot
+                    if messages[-1].metadata["status"] == "pending":
+                        messages[-1].content = msg
+                    else:
+                        messages.append(
+                            gr.ChatMessage(
+                                role="assistant",
+                                content=msg,
+                                metadata={"status": "pending"},
+                            )
+                        )
+                yield messages
+
+            yield messages
+        except Exception as e:
+            yield messages
+            raise gr.Error(f"Error in interaction: {str(e)}")
+
+    def log_user_message(self, text_input, file_uploads_log):
+        import gradio as gr
+
+        return (
+            text_input
+            + (
+                f"\nYou have been provided with these files, which might be helpful or not: {file_uploads_log}"
+                if len(file_uploads_log) > 0
+                else ""
+            ),
+            "",
+            gr.Button(interactive=False),
         )
 
-        with gr.Row(elem_classes="main-container"):
-            # Left side - Chat Interface
-            with gr.Column(scale=1, elem_classes="chat-container"):
-                chatbot = gr.Chatbot(
-                    show_copy_button=True,
-                    avatar_images=(None, "💗"),
-                    type="messages",
-                    height="75vh",
-                )
+    def launch(self, share: bool = True, **kwargs):
+        self.create_app().launch(debug=True, share=share, **kwargs)
 
-                with gr.Row():
-                    msg_input = gr.Textbox(
-                        placeholder="Describe the Gradio app you want to build...",
-                        scale=4,
-                        container=False,
+    def create_app(self):
+        import gradio as gr
+
+        # with gr.Blocks(theme="ocean", fill_height=True) as demo:
+        with gr.Blocks(
+            title="💗Likable",
+            theme=gr.themes.Soft(),
+            fill_height=True,
+            fill_width=True,
+        ) as demo:
+            gr.Markdown("# 💗Likable")
+
+            with gr.Row(elem_classes="main-container"):
+                # Left side - Chat Interface
+                with gr.Column(scale=1, elem_classes="chat-container"):
+                    chatbot = gr.Chatbot(
+                        # show_copy_button=True,
+                        avatar_images=(
+                            None,
+                            "http://em-content.zobj.net/source/apple/419/growing-heart_1f497.png",
+                        ),
+                        type="messages",
+                        resizable=True,
                     )
-                    send_btn = gr.Button("Build App", scale=1, variant="primary")
 
-            # Right side - Preview/Code Toggle
-            with gr.Column(scale=4, elem_classes="preview-container"):
-                with gr.Tab("Preview"):
-                    preview_html = gr.HTML(
-                        value=create_iframe_preview(), elem_id="preview-container"
-                    )
+                    with gr.Column():
+                        text_input = gr.Textbox(
+                            placeholder="Ask Likable...",
+                            scale=4,
+                            container=False,
+                        )
+                        submit_btn = gr.Button("↑", size="sm", variant="primary")
 
-                with gr.Tab("Code"):
-                    with gr.Row():
-                        save_btn = gr.Button("Save", size="sm")
-                    with gr.Row(equal_height=True):
-                        file_explorer = gr.FileExplorer(
-                            scale=1,
-                            file_count="single",
-                            value="app.py",
-                            root_dir="sandbox",
+                # Right side - Preview/Code Toggle
+                with gr.Column(scale=4, elem_classes="preview-container"):
+                    with gr.Tab("Preview"):
+                        preview_html = gr.HTML(
+                            value=create_iframe_preview(), elem_id="preview-container"
                         )
 
-                        # Get initial code content dynamically
-                        def get_initial_code():
-                            app_path = find_app_py_in_sandbox()
-                            if app_path and os.path.exists(app_path):
-                                return load_file(app_path)
-                            return "# No app created yet - use the chat to create one!"
+                    with gr.Tab("Code"):
+                        with gr.Row():
+                            save_btn = gr.Button("Save", size="sm")
+                        with gr.Row(equal_height=True):
+                            file_explorer = gr.FileExplorer(
+                                scale=1,
+                                file_count="single",
+                                value="app.py",
+                                root_dir="sandbox",
+                            )
 
-                        code_editor = gr.Code(
-                            scale=3,
-                            value=get_initial_code(),
-                            language="python",
-                            visible=True,
-                            interactive=True,
-                            autocomplete=True,
-                        )
+                            # Get initial code content dynamically
+                            def get_initial_code():
+                                app_path = find_app_py_in_sandbox()
+                                if app_path and os.path.exists(app_path):
+                                    return load_file(app_path)
+                                return (
+                                    "# No app created yet - use the chat to create one!"
+                                )
 
-        # Event handlers
-        file_explorer.change(fn=load_file, inputs=file_explorer, outputs=code_editor)
+                            code_editor = gr.Code(
+                                scale=3,
+                                value=get_initial_code(),
+                                language="python",
+                                visible=True,
+                                interactive=True,
+                                autocomplete=True,
+                            )
+            # Add session state to store session-specific data
+            session_state = gr.State({})
+            stored_messages = gr.State([])
+            file_uploads_log = gr.State([])
 
-        def save_and_refresh(path, new_text):
-            save_file(path, new_text)
-            # Wait a moment for file to be saved
-            time.sleep(0.5)
-            # Return updated iframe preview with forced refresh
-            return create_iframe_preview()
+            # Set up event handlers
+            file_explorer.change(
+                fn=load_file, inputs=file_explorer, outputs=code_editor
+            )
 
-        save_btn.click(
-            fn=save_and_refresh,
-            inputs=[file_explorer, code_editor],
-            outputs=[preview_html],
-        )
+            def save_and_refresh(path, new_text):
+                save_file(path, new_text)
+                # Wait a moment for file to be saved
+                time.sleep(0.5)
+                # Return updated iframe preview with forced refresh
+                return create_iframe_preview()
 
-        # Event handlers for chat - updated to use the combined planning and
-        # coding function
-        msg_input.submit(
-            generate_ai_response,
-            inputs=[msg_input, chatbot],
-            outputs=[chatbot, msg_input],
-        )
+            save_btn.click(
+                fn=save_and_refresh,
+                inputs=[file_explorer, code_editor],
+                outputs=[preview_html],
+            )
 
-        send_btn.click(
-            generate_ai_response,
-            inputs=[msg_input, chatbot],
-            outputs=[chatbot, msg_input],
-        )
+            text_input.submit(
+                self.log_user_message,
+                [text_input, file_uploads_log],
+                [stored_messages, text_input, submit_btn],
+            ).then(
+                self.interact_with_agent,
+                [stored_messages, chatbot, session_state],
+                [chatbot],
+            ).then(
+                fn=create_iframe_preview,
+                inputs=[],
+                outputs=[preview_html],
+            ).then(
+                lambda: (
+                    gr.Textbox(
+                        interactive=True,
+                        placeholder="Ask Likable...",
+                    ),
+                    gr.Button(interactive=True),
+                ),
+                None,
+                [text_input, submit_btn],
+            )
 
-        # Auto-start preview when the app loads
-        def on_app_load():
-            ensure_preview_running()
-            return create_iframe_preview()
+            submit_btn.click(
+                self.log_user_message,
+                [text_input, file_uploads_log],
+                [stored_messages, text_input, submit_btn],
+            ).then(
+                self.interact_with_agent,
+                [stored_messages, chatbot, session_state],
+                [chatbot],
+            ).then(
+                fn=create_iframe_preview,
+                inputs=[],
+                outputs=[preview_html],
+            ).then(
+                lambda: (
+                    gr.Textbox(
+                        interactive=True,
+                        placeholder="Ask Likable....",
+                    ),
+                    gr.Button(interactive=True),
+                ),
+                None,
+                [text_input, submit_btn],
+            )
 
-        demo.load(fn=on_app_load, outputs=[preview_html])
+            def on_app_load():
+                ensure_preview_running()
+                return create_iframe_preview()
 
-        # Clean up on app close
-        def cleanup():
-            stop_preview_app()
+            demo.load(fn=on_app_load, outputs=[preview_html])
 
-        demo.unload(cleanup)
+            # Clean up on app close
+            def cleanup():
+                stop_preview_app()
 
-    return demo
+            demo.unload(cleanup)
+
+        return demo
 
 
 if __name__ == "__main__":
-    # Register cleanup function to run on exit
-    atexit.register(stop_preview_app)
+    from kiss_agent import KISSAgent
 
-    demo = create_likable_ui()
-    # gradio_config = settings.get_gradio_config()
-
-    # Ensure cleanup on exit
-    def signal_handler(signum, frame):
-        stop_preview_app()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    try:
-        demo.launch(server_name="0.0.0.0", server_port=7862)
-    finally:
-        stop_preview_app()
+    agent = KISSAgent()
+    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7862)
