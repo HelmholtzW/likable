@@ -242,7 +242,6 @@ class GradioUI:
     def create_app(self):
         import gradio as gr
 
-        # with gr.Blocks(theme="ocean", fill_height=True) as demo:
         with gr.Blocks(
             title="💗Likable",
             theme=gr.themes.Soft(),
@@ -255,13 +254,13 @@ class GradioUI:
                 # Left side - Chat Interface
                 with gr.Column(scale=1, elem_classes="chat-container"):
                     chatbot = gr.Chatbot(
-                        # show_copy_button=True,
                         avatar_images=(
                             None,
                             "http://em-content.zobj.net/source/apple/419/growing-heart_1f497.png",
                         ),
                         type="messages",
                         resizable=True,
+                        height="70vh",
                     )
 
                     with gr.Column():
@@ -290,18 +289,9 @@ class GradioUI:
                                 root_dir="sandbox",
                             )
 
-                            # Get initial code content dynamically
-                            def get_initial_code():
-                                app_path = find_app_py_in_sandbox()
-                                if app_path and os.path.exists(app_path):
-                                    return load_file(app_path)
-                                return (
-                                    "# No app created yet - use the chat to create one!"
-                                )
-
                             code_editor = gr.Code(
                                 scale=3,
-                                value=get_initial_code(),
+                                value=load_file("sandbox/app.py"),
                                 language="python",
                                 visible=True,
                                 interactive=True,
@@ -324,6 +314,27 @@ class GradioUI:
                 # Return updated iframe preview with forced refresh
                 return create_iframe_preview()
 
+            def refresh_all():
+                file_explorer = gr.FileExplorer(
+                    scale=1,
+                    file_count="single",
+                    value="app.py",
+                    root_dir="sandbox",
+                )
+
+                code_editor = gr.Code(
+                    scale=3,
+                    value=load_file("sandbox/app.py"),
+                    language="python",
+                    visible=True,
+                    interactive=True,
+                    autocomplete=True,
+                )
+
+                preview_html = create_iframe_preview()
+
+                return file_explorer, code_editor, preview_html
+
             save_btn.click(
                 fn=save_and_refresh,
                 inputs=[file_explorer, code_editor],
@@ -339,9 +350,9 @@ class GradioUI:
                 [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
-                fn=create_iframe_preview,
+                fn=refresh_all,
                 inputs=[],
-                outputs=[preview_html],
+                outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
                     gr.Textbox(
@@ -363,9 +374,9 @@ class GradioUI:
                 [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
-                fn=create_iframe_preview,
+                fn=refresh_all,
                 inputs=[],
-                outputs=[preview_html],
+                outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
                     gr.Textbox(
