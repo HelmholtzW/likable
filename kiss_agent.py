@@ -341,7 +341,7 @@ class KISSAgent(ToolCallingAgent):
         prompt_template: str | None = None,
         **kwargs,
     ):
-        model_id = model_id or settings.manager_model_id
+        model_id = model_id or settings.model_id
         api_base_url = api_base_url or settings.api_base_url
         api_key = api_key or settings.api_key
         self.prompt_template = prompt_template or PROMPT_TEMPLATE
@@ -366,6 +366,7 @@ class KISSAgent(ToolCallingAgent):
             add_base_tools=False,
             **kwargs,
         )
+        # TODO: add callback to manage memory to limit context window
 
     def run(self, task: str, **kwargs) -> str:
         """Override run method to format prompt with task before calling parent run."""

@@ -200,6 +200,7 @@ class GradioUI:
             ):
                 if isinstance(msg, gr.ChatMessage):
                     messages[-1].metadata["status"] = "done"
+                    # TODO make it so that only the final answer is shown, rest in drop down
                     messages.append(msg)
                 elif isinstance(msg, str):  # Then it's only a completion delta
                     msg = msg.replace("<", r"\<").replace(
