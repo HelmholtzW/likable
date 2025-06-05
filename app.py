@@ -216,11 +216,12 @@ class GradioUI:
                 parent_id=self.parent_id,
             ):
                 if isinstance(msg, gr.ChatMessage):
-                    # messages[-1].metadata["status"] = "done"
-                    # TODO make it so that only the final answer is shown, rest in drop down
                     messages.append(msg)
                     messages[-1].metadata["status"] = "done"
                     if msg.content.startswith("**Final answer:**"):
+                        # Remove "**Final answer:**" prefix from the message content
+                        if msg.content.startswith("**Final answer:**"):
+                            msg.content = msg.content.replace("**Final answer:**\n", "")
                         # Set the parent message status to done when final answer is reached
                         for message in messages:
                             if (

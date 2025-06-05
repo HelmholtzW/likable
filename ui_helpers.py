@@ -120,7 +120,7 @@ def _process_action_step(
             role="assistant",
             content=model_output,
             metadata={
-                "title": "🤔 Thinking",
+                "title": "💭 Thought",
                 "status": "done",
                 "id": int(time.time() * 1000),
                 "parent_id": parent_id,
