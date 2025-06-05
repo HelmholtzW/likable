@@ -341,7 +341,6 @@ def stream_to_gradio(
         reset=reset_agent_memory,
         additional_args=additional_args,
     ):
-        print(f"parent_id: {parent_id}")
         if isinstance(event, ActionStep | PlanningStep | FinalAnswerStep):
             intermediate_text = ""
             for message in pull_messages_from_step(

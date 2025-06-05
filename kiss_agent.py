@@ -3,7 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from smolagents import LiteLLMModel, MCPClient, ToolCallingAgent, tool
+from smolagents import LiteLLMModel, ToolCallingAgent, tool
 
 from src.settings import settings
 
