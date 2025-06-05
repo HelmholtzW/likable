@@ -187,13 +187,6 @@ class GradioUI:
         import gradio as gr
 
         self.parent_id = int(time.time() * 1000)
-        messages.append(
-            gr.ChatMessage(
-                role="assistant",
-                content="",
-                metadata={"id": self.parent_id, "title": "...", "status": "pending"},
-            )
-        )
         # Get the agent type from the template agent
         if "agent" not in session_state:
             session_state["agent"] = self.agent
@@ -202,6 +195,18 @@ class GradioUI:
             messages.append(
                 gr.ChatMessage(role="user", content=prompt, metadata={"status": "done"})
             )
+            messages.append(
+                gr.ChatMessage(
+                    role="assistant",
+                    content="",
+                    metadata={
+                        "id": self.parent_id,
+                        "title": "🧠 Thinking...",
+                        "status": "pending",
+                    },
+                )
+            )
+            start_time = time.time()
             yield messages
 
             for msg in stream_to_gradio(
@@ -223,6 +228,9 @@ class GradioUI:
                                 and message.metadata.get("id") == self.parent_id
                             ):
                                 message.metadata["status"] = "done"
+                                message.metadata["title"] = (
+                                    f"🧠 Thought for {time.time() - start_time:.0f} sec."
+                                )
                                 break
                 elif isinstance(msg, str):  # Then it's only a completion delta
                     msg = msg.replace("<", r"\<").replace(
