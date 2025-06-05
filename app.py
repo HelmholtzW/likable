@@ -7,7 +7,7 @@ from pathlib import Path
 import gradio as gr
 import requests
 from smolagents.agents import MultiStepAgent
-from smolagents.gradio_ui import stream_to_gradio
+from ui_helpers import stream_to_gradio
 
 # from src.manager_agent import GradioManagerAgent
 from src.utils import load_file
@@ -181,10 +181,19 @@ class GradioUI:
 
     def __init__(self, agent: MultiStepAgent):
         self.agent = agent
+        self.parent_id = None
 
     def interact_with_agent(self, prompt, messages, session_state):
         import gradio as gr
 
+        self.parent_id = int(time.time() * 1000)
+        messages.append(
+            gr.ChatMessage(
+                role="assistant",
+                content="",
+                metadata={"id": self.parent_id, "title": "...", "status": "pending"},
+            )
+        )
         # Get the agent type from the template agent
         if "agent" not in session_state:
             session_state["agent"] = self.agent
@@ -196,12 +205,25 @@ class GradioUI:
             yield messages
 
             for msg in stream_to_gradio(
-                session_state["agent"], task=prompt, reset_agent_memory=False
+                session_state["agent"],
+                task=prompt,
+                reset_agent_memory=False,
+                parent_id=self.parent_id,
             ):
                 if isinstance(msg, gr.ChatMessage):
-                    messages[-1].metadata["status"] = "done"
+                    # messages[-1].metadata["status"] = "done"
                     # TODO make it so that only the final answer is shown, rest in drop down
                     messages.append(msg)
+                    messages[-1].metadata["status"] = "done"
+                    if msg.content.startswith("**Final answer:**"):
+                        # Set the parent message status to done when final answer is reached
+                        for message in messages:
+                            if (
+                                isinstance(message, gr.ChatMessage)
+                                and message.metadata.get("id") == self.parent_id
+                            ):
+                                message.metadata["status"] = "done"
+                                break
                 elif isinstance(msg, str):  # Then it's only a completion delta
                     msg = msg.replace("<", r"\<").replace(
                         ">", r"\>"

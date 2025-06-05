@@ -271,7 +271,7 @@ def test_app_py() -> str:
         try:
             # Wait for a short time to see if the process starts successfully
             # If it exits immediately with an error, we'll catch it
-            stdout, stderr = process.communicate(timeout=3)
+            stdout, stderr = process.communicate(timeout=5)
 
             # If we get here, the process exited within 10 seconds
             # Check for errors in stderr or stdout, not just return code
