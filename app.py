@@ -176,6 +176,61 @@ def ensure_preview_running():
         start_preview_app()
 
 
+def save_api_key(provider, api_key):
+    """Save API key to environment variable."""
+    if not api_key.strip():
+        return f"⚠️ Please enter a valid API key for {provider}"
+
+    # Map provider names to environment variable names
+    env_var_map = {
+        "Anthropic": "ANTHROPIC_API_KEY",
+        "OpenAI": "OPENAI_API_KEY",
+        "Hugging Face": "HUGGINGFACE_API_KEY",
+        "SambaNova": "SAMBANOVA_API_KEY",
+        "Mistral": "MISTRAL_API_KEY",
+    }
+
+    env_var_name = env_var_map.get(provider)
+    if env_var_name:
+        os.environ[env_var_name] = api_key.strip()
+        return f"✅ {provider} API key saved successfully"
+    else:
+        return f"❌ Unknown provider: {provider}"
+
+
+def get_api_key_status(selected_llm_provider="Anthropic"):
+    """Get the status of Hugging Face and selected LLM provider API keys."""
+    env_vars = {
+        "Hugging Face": "HUGGINGFACE_API_KEY",
+        "Anthropic": "ANTHROPIC_API_KEY",
+        "OpenAI": "OPENAI_API_KEY",
+        "SambaNova": "SAMBANOVA_API_KEY",
+        "Mistral": "MISTRAL_API_KEY",
+    }
+
+    status = []
+
+    # Always show Hugging Face status
+    hf_env_var = env_vars["Hugging Face"]
+    if os.getenv(hf_env_var):
+        key = os.getenv(hf_env_var)
+        masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
+        status.append(f"✅ Hugging Face: {masked_key}")
+    else:
+        status.append(f"❌ Hugging Face: Not set")
+
+    # Show selected LLM provider status
+    llm_env_var = env_vars.get(selected_llm_provider)
+    if llm_env_var and os.getenv(llm_env_var):
+        key = os.getenv(llm_env_var)
+        masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
+        status.append(f"✅ {selected_llm_provider}: {masked_key}")
+    else:
+        status.append(f"❌ {selected_llm_provider}: Not set")
+
+    return "\n".join(status)
+
+
 class GradioUI:
     """A one-line interface to launch your agent in Gradio"""
 
@@ -303,7 +358,7 @@ class GradioUI:
                         )
                         submit_btn = gr.Button("↑", size="sm", variant="primary")
 
-                # Right side - Preview/Code Toggle
+                # Right side - Preview/Code/Settings Toggle
                 with gr.Column(scale=4, elem_classes="preview-container"):
                     with gr.Tab("Preview"):
                         preview_html = gr.HTML(
@@ -329,10 +384,99 @@ class GradioUI:
                                 interactive=True,
                                 autocomplete=True,
                             )
+
+                    with gr.Tab("Settings"):
+                        gr.Markdown("## 🔑 API Keys")
+                        gr.Markdown(
+                            "Configure your API keys for different AI providers:"
+                        )
+
+                        # API Key Status Display
+                        api_status = gr.Textbox(
+                            label="Current API Key Status",
+                            value=get_api_key_status(),
+                            interactive=False,
+                            lines=2,
+                            max_lines=2,
+                        )
+
+                        # with gr.Row():
+                        #     refresh_status_btn = gr.Button(
+                        #         "🔄 Refresh Status", size="sm"
+                        #     )
+
+                        gr.Markdown("---")
+
+                        # Hugging Face Token
+                        with gr.Row():
+                            hf_token = gr.Textbox(
+                                label="Hugging Face Token",
+                                placeholder="hf_...",
+                                type="password",
+                                scale=4,
+                            )
+                            hf_save_btn = gr.Button("Save", size="sm", scale=1)
+
+                        gr.Markdown("---")
+
+                        # LLM Token with Provider Selection
+                        with gr.Row():
+                            llm_provider = gr.Dropdown(
+                                label="LLM Provider",
+                                choices=["Anthropic", "OpenAI", "Mistral", "SambaNova"],
+                                value="Anthropic",
+                                scale=1,
+                            )
+                            llm_token = gr.Textbox(
+                                label="LLM Token",
+                                placeholder="Enter your API key...",
+                                type="password",
+                                scale=3,
+                            )
+                            llm_save_btn = gr.Button("Save", size="sm", scale=1)
+
+                        # Status message for API key operations
+                        api_message = gr.Textbox(
+                            label="Status", interactive=False, visible=False
+                        )
+
             # Add session state to store session-specific data
             session_state = gr.State({})
             stored_messages = gr.State([])
             file_uploads_log = gr.State([])
+
+            # Set up event handlers for API key saving
+            def save_and_update_status(
+                provider, api_key, selected_llm_provider="Anthropic"
+            ):
+                message = save_api_key(provider, api_key)
+                status = get_api_key_status(selected_llm_provider)
+                return message, status, ""  # Clear the input field
+
+            hf_save_btn.click(
+                lambda key, llm_prov: save_and_update_status(
+                    "Hugging Face", key, llm_prov
+                ),
+                inputs=[hf_token, llm_provider],
+                outputs=[api_message, api_status, hf_token],
+            ).then(lambda: gr.Textbox(visible=True), outputs=[api_message])
+
+            llm_save_btn.click(
+                lambda provider, key: save_and_update_status(provider, key, provider),
+                inputs=[llm_provider, llm_token],
+                outputs=[api_message, api_status, llm_token],
+            ).then(lambda: gr.Textbox(visible=True), outputs=[api_message])
+
+            # refresh_status_btn.click(
+            #     fn=lambda llm_prov: get_api_key_status(llm_prov),
+            #     inputs=[llm_provider],
+            #     outputs=[api_status],
+            # )
+
+            # Update status when LLM provider dropdown changes
+            llm_provider.change(
+                fn=get_api_key_status, inputs=[llm_provider], outputs=[api_status]
+            )
 
             # Set up event handlers
             file_explorer.change(
