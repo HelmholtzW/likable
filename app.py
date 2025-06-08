@@ -14,7 +14,21 @@ from ui_helpers import stream_to_gradio
 
 preview_process = None
 PREVIEW_PORT = 7861  # Different port from main app
-PREVIEW_URL = f"http://localhost:{PREVIEW_PORT}"
+
+
+def get_preview_url():
+    """Get the appropriate preview URL based on environment."""
+    # Check if running in Docker
+    if os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER"):
+        # In Docker, use the host's IP for iframe access
+        host_ip = os.getenv("HOST_IP", "localhost")
+        return f"http://{host_ip}:{PREVIEW_PORT}"
+    else:
+        # Local development
+        return f"http://localhost:{PREVIEW_PORT}"
+
+
+PREVIEW_URL = os.getenv("PREVIEW_URL", get_preview_url())
 
 
 def find_app_py_in_sandbox():
@@ -98,7 +112,7 @@ def start_preview_app():
                 "--server-port",
                 str(PREVIEW_PORT),
                 "--server-name",
-                "127.0.0.1",
+                "0.0.0.0",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
