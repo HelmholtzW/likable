@@ -499,18 +499,18 @@ class GradioUI:
                 return message, status, ""  # Clear the input field
 
             hf_save_btn.click(
-                lambda key, llm_prov: save_and_update_status(
-                    "Hugging Face", key, llm_prov, session_state
+                lambda key, llm_prov, sess_state: save_and_update_status(
+                    "Hugging Face", key, llm_prov, sess_state
                 ),
-                inputs=[hf_token, llm_provider],
+                inputs=[hf_token, llm_provider, session_state],
                 outputs=[api_message, api_status, hf_token],
             ).then(lambda: gr.Textbox(visible=True), outputs=[api_message])
 
             llm_save_btn.click(
-                lambda provider, key: save_and_update_status(
-                    provider, key, provider, session_state
+                lambda provider, key, sess_state: save_and_update_status(
+                    provider, key, provider, sess_state
                 ),
-                inputs=[llm_provider, llm_token],
+                inputs=[llm_provider, llm_token, session_state],
                 outputs=[api_message, api_status, llm_token],
             ).then(lambda: gr.Textbox(visible=True), outputs=[api_message])
 
