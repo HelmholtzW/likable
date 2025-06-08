@@ -13,7 +13,7 @@ from src.utils import load_file
 from ui_helpers import stream_to_gradio
 
 preview_process = None
-PREVIEW_PORT = 7860  # Different port from main app
+PREVIEW_PORT = 7861  # Different port from main app
 PREVIEW_URL = f"http://localhost:{PREVIEW_PORT}"
 
 
@@ -200,7 +200,7 @@ border-radius: 4px; text-align: left;'>{message}</pre>
                     🚀 Preview App Running!
                 </h3>
                 <p style='color: #666; margin-bottom: 25px; font-size: 16px;'>
-                    Your Gradio app is running successfully on port 7860.
+                    Your Gradio app is running successfully.
                 </p>
                 <div style='margin: 20px 0;'>
                     <a href="{PREVIEW_URL}" target="_blank"
@@ -694,4 +694,4 @@ if __name__ == "__main__":
     from kiss_agent import KISSAgent
 
     agent = KISSAgent()
-    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7862)
+    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7860)
