@@ -18,11 +18,13 @@ PREVIEW_PORT = 7861  # Different port from main app
 
 def get_preview_url():
     """Get the appropriate preview URL based on environment."""
+    # For Hugging Face Spaces with nginx proxy, use the /preview/ path
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        return "/preview/"
     # Check if running in Docker
-    if os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER"):
-        # In Docker, use the host's IP for iframe access
-        host_ip = os.getenv("HOST_IP", "localhost")
-        return f"http://{host_ip}:{PREVIEW_PORT}"
+    elif os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER"):
+        # In Docker with nginx proxy, use relative path
+        return "/preview/"
     else:
         # Local development
         return f"http://localhost:{PREVIEW_PORT}"
@@ -64,6 +66,10 @@ def save_file(path, new_text):
 
 def stop_preview_app():
     """Stop the preview app subprocess if it's running."""
+    # In HF Spaces, preview app runs as separate service, no need to manage subprocess
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        return
+
     global preview_process
     if preview_process and preview_process.poll() is None:
         print("🛑 Stopping preview app...")
@@ -90,6 +96,11 @@ def stop_preview_app():
 
 def start_preview_app():
     """Start the preview app in a subprocess."""
+    # In HF Spaces, preview app runs as separate service via supervisor
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        print("✅ Preview app managed by supervisor in HF Spaces")
+        return True, "Preview app running via supervisor"
+
     global preview_process
 
     # Stop any existing preview app
@@ -134,9 +145,12 @@ def start_preview_app():
         max_retries = 10
         for i in range(max_retries):
             try:
-                response = requests.get(PREVIEW_URL, timeout=1)
+                response = requests.get(f"http://localhost:{PREVIEW_PORT}", timeout=1)
                 if response.status_code == 200:
-                    print(f"✅ Preview app started successfully on {PREVIEW_URL}")
+                    print(
+                        f"✅ Preview app started successfully on \
+localhost:{PREVIEW_PORT}"
+                    )
                     return True, "App started successfully"
             except requests.exceptions.RequestException:
                 print(
@@ -145,7 +159,10 @@ def start_preview_app():
                 pass
             time.sleep(0.5)
 
-        print(f"⚠️ Preview app started but may not be fully ready. Check {PREVIEW_URL}")
+        print(
+            f"⚠️ Preview app started but may not be fully ready. \
+            Check localhost:{PREVIEW_PORT}"
+        )
         return True, "App started successfully"
 
     except Exception as e:
@@ -173,12 +190,16 @@ def create_iframe_preview():
 
 def is_preview_running():
     """Check if the preview app is running and accessible."""
+    # In HF Spaces, assume preview app is always running via supervisor
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        return True
+
     global preview_process
     if preview_process is None or preview_process.poll() is not None:
         return False
 
     try:
-        response = requests.get(PREVIEW_URL, timeout=2)
+        response = requests.get(f"http://localhost:{PREVIEW_PORT}", timeout=2)
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -674,4 +695,13 @@ if __name__ == "__main__":
     from kiss_agent import KISSAgent
 
     agent = KISSAgent()
-    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7860)
+
+    # Determine port based on environment
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        # In HF Spaces, run on 7862 (nginx will proxy to 7860)
+        port = 7862
+    else:
+        # Local development
+        port = 7860
+
+    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=port)
