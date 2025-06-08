@@ -693,11 +693,5 @@ class GradioUI:
 if __name__ == "__main__":
     from kiss_agent import KISSAgent
 
-    # t = test_app_py()
-    print("🚀 Starting Likable - AI Agent Interface")
-    print("   Main app will run on http://localhost:7862")
-    print("   Preview apps will run on http://localhost:7860")
-    print("─" * 50)
-
     agent = KISSAgent()
     GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7862)

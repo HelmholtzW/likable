@@ -13,6 +13,8 @@ dependencies = [
     "requests>=2.32.0",
     "watchdog>=5.0.0",
     "matplotlib>=3.10.3",
+    "numpy>=1.23,<2.3.0",
+    "pandas>=1.0,<2.3.0",
 ]
 
 [dependency-groups]
