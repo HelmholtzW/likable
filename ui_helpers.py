@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,14 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import re
-import shutil
-from pathlib import Path
-from typing import Generator
 import time
+from collections.abc import Generator
+
 from smolagents.agent_types import AgentAudio, AgentImage, AgentText
-from smolagents.agents import MultiStepAgent, PlanningStep
+from smolagents.agents import PlanningStep
 from smolagents.memory import ActionStep, FinalAnswerStep
 from smolagents.models import ChatMessageStreamDelta
 from smolagents.utils import _is_package_available
@@ -32,7 +29,10 @@ def get_step_footnote_content(
     """Get a footnote string for a step log with duration and token information"""
     step_footnote = f"**{step_name}**"
     if step_log.token_usage is not None:
-        step_footnote += f" | Input tokens: {step_log.token_usage.input_tokens:,} | Output tokens: {step_log.token_usage.output_tokens:,}"
+        step_footnote += (
+            f" | Input tokens: {step_log.token_usage.input_tokens:,} | "
+            f"Output tokens: {step_log.token_usage.output_tokens:,}"
+        )
     step_footnote += (
         f" | Duration: {round(float(step_log.timing.duration), 2)}s"
         if step_log.timing.duration
@@ -57,7 +57,8 @@ def _clean_model_output(model_output: str) -> str:
     if not model_output:
         return ""
     model_output = model_output.strip()
-    # Remove any trailing <end_code> and extra backticks, handling multiple possible formats
+    # Remove any trailing <end_code> and extra backticks,
+    # handling multiple possible formats
     model_output = re.sub(
         r"```\s*<end_code>", "```", model_output
     )  # handles ```<end_code>
@@ -105,13 +106,6 @@ def _process_action_step(
         `gradio.ChatMessage`: Gradio ChatMessages representing the action step.
     """
     import gradio as gr
-
-    # Output the step number
-    step_number = f"Step {step_log.step_number}"
-    # if not skip_model_outputs:
-    #     # yield gr.ChatMessage(
-    #     #     role="assistant", content=f"**{step_number}**", metadata={"status": "done"}
-    #     # )
 
     # First yield the thought/reasoning from the LLM
     if not skip_model_outputs and getattr(step_log, "model_output", ""):
@@ -301,13 +295,18 @@ def pull_messages_from_step(
 
     Args:
         step_log: The step log to display as gr.ChatMessage objects.
-        skip_model_outputs: If True, skip the model outputs when creating the gr.ChatMessage objects:
-            This is used for instance when streaming model outputs have already been displayed.
-        parent_id: The ID of the parent message. Only used for nested thoughts. Nested thoughts can be nested by setting the parent_id to the id of the parent thought.
+        skip_model_outputs: If True, skip the model outputs when creating
+            the gr.ChatMessage objects:
+            This is used for instance when streaming model outputs have
+            already been displayed.
+        parent_id: The ID of the parent message. Only used for nested thoughts.
+            Nested thoughts can be nested by setting the parent_id to the id
+            of the parent thought.
     """
     if not _is_package_available("gradio"):
         raise ModuleNotFoundError(
-            "Please install 'gradio' extra to use the GradioUI: `pip install 'smolagents[gradio]'`"
+            "Please install 'gradio' extra to use the GradioUI: "
+            "`pip install 'smolagents[gradio]'`"
         )
     if isinstance(step_log, ActionStep):
         yield from _process_action_step(step_log, skip_model_outputs, parent_id)
@@ -327,10 +326,12 @@ def stream_to_gradio(
     additional_args: dict | None = None,
     parent_id: int | None = None,
 ) -> Generator:
-    """Runs an agent with the given task and streams the messages from the agent as gradio ChatMessages."""
+    """Runs an agent with the given task and streams the messages from the agent
+    as gradio ChatMessages."""
     if not _is_package_available("gradio"):
         raise ModuleNotFoundError(
-            "Please install 'gradio' extra to use the GradioUI: `pip install 'smolagents[gradio]'`"
+            "Please install 'gradio' extra to use the GradioUI: "
+            "`pip install 'smolagents[gradio]'`"
         )
     intermediate_text = ""
 
@@ -343,13 +344,12 @@ def stream_to_gradio(
     ):
         if isinstance(event, ActionStep | PlanningStep | FinalAnswerStep):
             intermediate_text = ""
-            for message in pull_messages_from_step(
+            yield from pull_messages_from_step(
                 event,
                 # If we're streaming model outputs, no need to display them twice
                 skip_model_outputs=getattr(agent, "stream_outputs", False),
                 parent_id=parent_id,
-            ):
-                yield message
+            )
         elif isinstance(event, ChatMessageStreamDelta):
             intermediate_text += event.content or ""
             yield intermediate_text

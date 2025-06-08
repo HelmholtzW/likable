@@ -8,8 +8,10 @@ from smolagents import LiteLLMModel, ToolCallingAgent, tool
 from src.settings import settings
 
 PROMPT_TEMPLATE = """You are an expert software developer for Gradio.
-You are given a task to develop a Gradio application and can use all the tools at your disposal to do so.
-You always try to do everything inside of the app.py file. Only in rare cases you might need to edit or create other files.
+You are given a task to develop a Gradio application and can use all the tools \
+at your disposal to do so.
+You always try to do everything inside of the app.py file. Only in rare cases \
+you might need to edit or create other files.
 
 The overarching goal is always to create a Gradio application.
 
@@ -23,7 +25,8 @@ Always test the app.py file after you have made changes to it!
 @tool
 def create_new_file(whole_edit: str) -> str:
     """
-    Create python files using aider's whole edit format. You can use this tool to overwrite any python file or create a new one.
+    Create python files using aider's whole edit format. You can use this tool
+    to overwrite any python file or create a new one.
 
     Your input should be a string in the following format:
     [filename]
@@ -87,9 +90,57 @@ def create_new_file(whole_edit: str) -> str:
 
 
 @tool
+def install_package(package_name: str) -> str:
+    """
+    Install a Python package using uv when encountering ModuleNotFoundError.
+    This tool adds the package to the project's dependencies and installs it.
+
+    Args:
+        package_name: Name of the package to install (e.g., 'requests', 'pandas==2.0.0')
+
+    Returns:
+        Status message indicating success or failure
+    """
+    try:
+        # Store original working directory
+        original_cwd = os.getcwd()
+
+        # Change to the project root directory (where pyproject.toml is)
+        os.chdir(Path(__file__).parent)
+
+        # Run uv add command
+        result = subprocess.run(
+            ["uv", "add", package_name],
+            capture_output=True,
+            text=True,
+            timeout=60,  # 60 second timeout for package installation
+        )
+
+        if result.returncode == 0:
+            return f"✅ Successfully installed {package_name} using uv"
+        else:
+            error_msg = result.stderr or result.stdout
+            return f"❌ Failed to install {package_name}:\n{error_msg}"
+
+    except subprocess.TimeoutExpired:
+        return f"❌ Installation of {package_name} timed out after 60 seconds"
+    except FileNotFoundError:
+        return "❌ Error: uv command not found. Please make sure uv is installed."
+    except Exception as e:
+        return f"❌ Error installing {package_name}: {str(e)}"
+    finally:
+        # Change back to original directory
+        try:
+            os.chdir(original_cwd)
+        except NameError:
+            pass
+
+
+@tool
 def python_editor(diff_content: str, filename: str = "app.py") -> str:
     """
-    This tool allows you to edit the code in a python file by applying a diff edit to app.py using aider's diff edit format.
+    This tool allows you to edit the code in a python file by applying a diff
+    edit to app.py using aider's diff edit format.
 
     The input should be in the format:
     [filename]
@@ -235,7 +286,7 @@ def file_viewer(filename: str) -> str:
     Returns:
         str: content of the file
     """
-    with open(Path("sandbox") / filename, "r") as f:
+    with open(Path("sandbox") / filename) as f:
         return f.read()
 
 
@@ -295,6 +346,25 @@ def test_app_py() -> str:
 
             if process.returncode != 0 or has_error:
                 error_output = stderr if stderr else stdout
+
+                # Check specifically for ModuleNotFoundError to
+                # suggest package installation
+                if (
+                    "modulenotfounderror" in all_output_lower
+                    or "no module named" in all_output_lower
+                ):
+                    # Try to extract the missing module name
+                    import_pattern = (
+                        r"(?:ModuleNotFoundError:|No module named) '?([^'\s]+)'?"
+                    )
+                    match = re.search(import_pattern, all_output, re.IGNORECASE)
+                    missing_module = match.group(1) if match else "unknown"
+                    return (
+                        f"❌ ModuleNotFoundError: Missing module '{missing_module}'\n"
+                        f"Consider using the install_package tool to install it.\n"
+                        f"Full error:\n{error_output}"
+                    )
+
                 return f"❌ Error running app.py:\n{error_output}"
             else:
                 return "✅ app.py executed successfully"
@@ -317,7 +387,7 @@ def test_app_py() -> str:
                 _, stderr = process.communicate(timeout=1)
                 if stderr and "error" in stderr.lower():
                     return f"❌ Error detected in app.py:\n{stderr}"
-            except:
+            except Exception:
                 pass
 
             return "✅ app.py started successfully (server detected and stopped)"
@@ -361,6 +431,7 @@ class KISSAgent(ToolCallingAgent):
                 file_explorer,
                 file_viewer,
                 create_new_file,
+                install_package,
             ],
             model=model,
             add_base_tools=False,

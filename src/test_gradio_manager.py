@@ -6,15 +6,16 @@ This script shows how to use the GradioManagerAgent with the GradioUI
 to create a web interface for the multi-agent development workflow.
 """
 
-import sys
 import os
+import sys
 
 # Add the current directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from manager_agent import GradioManagerAgent
     from smolagents.gradio_ui import GradioUI
+
+    from manager_agent import GradioManagerAgent
 
     def main():
         """Main function to launch the Gradio UI with the GradioManagerAgent."""
@@ -23,7 +24,7 @@ try:
         # Create the manager agent
         manager_agent = GradioManagerAgent()
 
-        print(f"✅ Manager agent created successfully!")
+        print("✅ Manager agent created successfully!")
         print(f"   - Name: {manager_agent.name}")
         print(f"   - Description: {manager_agent.description[:100]}...")
         print(f"   - Is CodeAgent: {hasattr(manager_agent, 'run')}")
@@ -39,7 +40,8 @@ try:
         print("   - Try asking: 'Create a simple calculator app'")
 
         # Launch the Gradio interface
-        # Note: Set share=False for local development, share=True to create a public link
+        # Note: Set share=False for local development, share=True to create
+        # a public link
         gradio_ui.launch(share=False, server_name="0.0.0.0", server_port=7860)
 
     if __name__ == "__main__":

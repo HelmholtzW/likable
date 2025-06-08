@@ -100,7 +100,8 @@ Provides comprehensive workflow management and detailed progress reporting."""
 
     def run(self, task: str, **kwargs) -> str:
         """
-        Handle development management tasks by running the inherited agent functionality.
+        Handle development management tasks by running the inherited agent
+        functionality.
 
         Args:
             task: The user's description of the application to build

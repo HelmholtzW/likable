@@ -7,10 +7,10 @@ from pathlib import Path
 import gradio as gr
 import requests
 from smolagents.agents import MultiStepAgent
-from ui_helpers import stream_to_gradio
 
 # from src.manager_agent import GradioManagerAgent
 from src.utils import load_file
+from ui_helpers import stream_to_gradio
 
 preview_process = None
 PREVIEW_PORT = 7860  # Different port from main app
@@ -52,18 +52,26 @@ def stop_preview_app():
     """Stop the preview app subprocess if it's running."""
     global preview_process
     if preview_process and preview_process.poll() is None:
+        print("🛑 Stopping preview app...")
         try:
             # Send SIGTERM to gracefully shutdown
             preview_process.terminate()
             # Wait a bit for graceful shutdown
             preview_process.wait(timeout=5)
+            print("✅ Preview app stopped gracefully")
         except subprocess.TimeoutExpired:
             # Force kill if graceful shutdown fails
             preview_process.kill()
+            print("⚠️ Preview app force-killed after timeout")
         except Exception as e:
-            print(f"Error stopping preview app: {e}")
+            print(f"❌ Error stopping preview app: {e}")
         finally:
             preview_process = None
+    else:
+        if preview_process is None:
+            print("ℹ️ No preview app process to stop")
+        else:
+            print("ℹ️ Preview app process already terminated")
 
 
 def start_preview_app():
@@ -76,9 +84,12 @@ def start_preview_app():
     app_path = find_app_py_in_sandbox()
 
     if not app_path or not os.path.exists(app_path):
-        return False, "No app.py found in sandbox directory or its subfolders"
+        error_msg = "No app.py found in sandbox directory or its subfolders"
+        print(f"❌ Preview Error: {error_msg}")
+        return False, error_msg
 
     try:
+        print(f"🚀 Starting preview app from: {app_path}")
         # Start the subprocess to run the sandbox app
         preview_process = subprocess.Popen(
             [
@@ -101,31 +112,42 @@ def start_preview_app():
         if preview_process.poll() is not None:
             # Process has terminated, read the error
             stdout, stderr = preview_process.communicate()
-            return False, f"App failed to start:\n{stderr}\n{stdout}"
+            error_msg = f"App failed to start:\n{stderr}\n{stdout}"
+            print(f"❌ Preview Error: {error_msg}")
+            return False, error_msg
 
         # Try to verify the server is responding
         max_retries = 10
-        for _ in range(max_retries):
+        for i in range(max_retries):
             try:
                 response = requests.get(PREVIEW_URL, timeout=1)
                 if response.status_code == 200:
+                    print(f"✅ Preview app started successfully on {PREVIEW_URL}")
                     return True, "App started successfully"
             except requests.exceptions.RequestException:
+                print(
+                    f"🔄 Attempt {i+1}/{max_retries}: Waiting for server to respond..."
+                )
                 pass
             time.sleep(0.5)
 
+        print(f"⚠️ Preview app started but may not be fully ready. Check {PREVIEW_URL}")
         return True, "App started successfully"
 
     except Exception as e:
-        return False, f"Error starting app: {str(e)}"
+        error_msg = f"Error starting app: {str(e)}"
+        print(f"❌ Preview Error: {error_msg}")
+        return False, error_msg
 
 
 def create_iframe_preview():
     """Create an iframe HTML element for the preview."""
+    print("🔄 Creating iframe preview...")
     # Start the preview app
     success, message = start_preview_app()
 
     if not success:
+        print(f"❌ Failed to create preview iframe: {message}")
         return f"""
         <div style='padding: 20px; text-align: center; color: #d32f2f;'>
             <h3>❌ Failed to start preview</h3>
@@ -136,23 +158,108 @@ border-radius: 4px; text-align: left;'>{message}</pre>
 
     # Add timestamp to force iframe refresh
     timestamp = int(time.time() * 1000)
-    preview_url_with_timestamp = f"{PREVIEW_URL}?t={timestamp}"
+    print("✅ Iframe preview created successfully")
 
     return f"""
-    <div style='width: 100%; height: 70vh; border: 1px solid #ddd; \
-border-radius: 8px; overflow: hidden;'>
+    <div style='width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: \
+    8px; overflow: hidden; position: relative; background: #f9f9f9;'>
         <iframe
-            src="{preview_url_with_timestamp}"
+            id="preview-iframe-{timestamp}"
+            src="{PREVIEW_URL}"
             width="100%"
             height="100%"
             frameborder="0"
-            style="border: none;"
-            key="{timestamp}"
+            style="border: none; background: white;"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups \
+            allow-top-navigation allow-modals"
+            loading="eager"
+            onload="document.getElementById('loading-{timestamp}').style.display='none'"
+            onerror="document.getElementById('iframe-{timestamp}').style.display='none';\
+             document.getElementById('fallback-{timestamp}').style.display='block'"
         ></iframe>
+
+        <!-- Loading indicator -->
+        <div id="loading-{timestamp}" style="position: absolute; top: 0; left: 0; \
+            width: 100%; height: 100%; background: rgba(255,255,255,0.9); \
+            display: flex; align-items: center; justify-content: center; z-index: 10;">
+            <div style="text-align: center;">
+                <div style="border: 4px solid #f3f3f3; border-top: 4px solid #007bff; \
+                border-radius: 50%; width: 40px; height: 40px; animation: spin 1s \
+                linear infinite; margin: 0 auto 15px;"></div>
+                <p style="color: #666; margin: 0;">Loading preview...</p>
+            </div>
+        </div>
+
+        <!-- Fallback content -->
+        <div id="fallback-{timestamp}" style="display: none; padding: 20px; \
+            text-align: center; height: 100%; display: flex; flex-direction: column; \
+            justify-content: center;">
+            <div style='background: white; border-radius: 8px; padding: 30px; \
+                margin: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+                <h3 style='color: #28a745; margin-bottom: 20px;'>
+                    🚀 Preview App Running!
+                </h3>
+                <p style='color: #666; margin-bottom: 25px; font-size: 16px;'>
+                    Your Gradio app is running successfully on port 7860.
+                </p>
+                <div style='margin: 20px 0;'>
+                    <a href="{PREVIEW_URL}" target="_blank"
+                       style='display: inline-block; padding: 12px 25px; background: \
+                        #007bff; color: white;
+                              text-decoration: none; border-radius: 6px; \
+                                font-weight: bold; font-size: 16px;
+                              box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>
+                        🔗 Open Preview in New Tab
+                    </a>
+                </div>
+                <div style='margin-top: 20px; padding: 15px; background: #f8f9fa; \
+                border-radius: 4px; border-left: 4px solid #007bff;'>
+                    <p style='margin: 0; color: #495057; font-size: 14px;'>
+                        <strong>URL:</strong> <code style='background: #e9ecef; \
+                        padding: 2px 6px; border-radius: 3px;'>{PREVIEW_URL}</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Open in new tab button -->
+        <div style='position: absolute; top: 10px; right: 10px; z-index: 20;'>
+            <a href="{PREVIEW_URL}" target="_blank"
+               style='display: inline-block; padding: 8px 12px; background: \
+                rgba(0,0,0,0.8); color: white;
+                      text-decoration: none; border-radius: 4px; font-size: 12px;'>
+                ↗ Open in new tab
+            </a>
+        </div>
     </div>
+
     <div style='padding: 10px; text-align: center; color: #666; font-size: 12px;'>
         Preview running on <a href="{PREVIEW_URL}" target="_blank">{PREVIEW_URL}</a>
+        <span style='margin-left: 10px; color: #999;'>
+            Last updated: {time.strftime('%H:%M:%S')}
+        </span>
     </div>
+
+    <style>
+    @keyframes spin {{
+        0% {{ transform: rotate(0deg); }}
+        100% {{ transform: rotate(360deg); }}
+    }}
+    </style>
+
+    <script>
+    // Auto-fallback after 10 seconds if iframe doesn't load
+    setTimeout(function() {{
+        const loading = document.getElementById('loading-{timestamp}');
+        const fallback = document.getElementById('fallback-{timestamp}');
+        if (loading && loading.style.display !== 'none') {{
+            loading.style.display = 'none';
+            if (fallback) {{
+                fallback.style.display = 'flex';
+            }}
+        }}
+    }}, 10000);
+    </script>
     """
 
 
@@ -217,7 +324,7 @@ def get_api_key_status(selected_llm_provider="Anthropic"):
         masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
         status.append(f"✅ Hugging Face: {masked_key}")
     else:
-        status.append(f"❌ Hugging Face: Not set")
+        status.append("❌ Hugging Face: Not set")
 
     # Show selected LLM provider status
     llm_env_var = env_vars.get(selected_llm_provider)
@@ -277,7 +384,8 @@ class GradioUI:
                         # Remove "**Final answer:**" prefix from the message content
                         if msg.content.startswith("**Final answer:**"):
                             msg.content = msg.content.replace("**Final answer:**\n", "")
-                        # Set the parent message status to done when final answer is reached
+                        # Set the parent message status to done when final
+                        # answer is reached
                         for message in messages:
                             if (
                                 isinstance(message, gr.ChatMessage)
@@ -285,7 +393,8 @@ class GradioUI:
                             ):
                                 message.metadata["status"] = "done"
                                 message.metadata["title"] = (
-                                    f"🧠 Thought for {time.time() - start_time:.0f} sec."
+                                    f"🧠 Thought for {time.time() - start_time:.0f} "
+                                    "sec."
                                 )
                                 break
                 elif isinstance(msg, str):  # Then it's only a completion delta
@@ -307,7 +416,7 @@ class GradioUI:
             yield messages
         except Exception as e:
             yield messages
-            raise gr.Error(f"Error in interaction: {str(e)}")
+            raise gr.Error(f"Error in interaction: {str(e)}") from e
 
     def log_user_message(self, text_input, file_uploads_log):
         import gradio as gr
@@ -315,7 +424,8 @@ class GradioUI:
         return (
             text_input
             + (
-                f"\nYou have been provided with these files, which might be helpful or not: {file_uploads_log}"
+                f"\nYou have been provided with these files, which might be "
+                f"helpful or not: {file_uploads_log}"
                 if len(file_uploads_log) > 0
                 else ""
             ),
@@ -581,8 +691,13 @@ class GradioUI:
 
 
 if __name__ == "__main__":
-    from kiss_agent import KISSAgent, test_app_py
+    from kiss_agent import KISSAgent
 
     # t = test_app_py()
+    print("🚀 Starting Likable - AI Agent Interface")
+    print("   Main app will run on http://localhost:7862")
+    print("   Preview apps will run on http://localhost:7860")
+    print("─" * 50)
+
     agent = KISSAgent()
     GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=7862)
