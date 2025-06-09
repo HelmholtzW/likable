@@ -1,6 +1,9 @@
+import atexit
 import os
+import signal
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -13,6 +16,27 @@ from ui_helpers import stream_to_gradio
 
 preview_process = None
 PREVIEW_PORT = 7861  # Internal port for preview apps
+last_restart_time = 0  # Track when we last restarted the preview app
+RESTART_COOLDOWN = 10  # Minimum seconds between restarts
+
+
+def cleanup_preview_on_exit():
+    """Cleanup function called on program exit."""
+    print("🧹 Cleaning up preview app on exit...")
+    stop_preview_app()
+
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    print(f"🔔 Received signal {signum}, shutting down gracefully...")
+    cleanup_preview_on_exit()
+    sys.exit(0)
+
+
+# Register signal handlers and exit handler
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+atexit.register(cleanup_preview_on_exit)
 
 
 def get_preview_url():
@@ -91,15 +115,45 @@ def stop_preview_app():
 
 def start_preview_app():
     """Start the preview app in a subprocess if it's not already running."""
-    global preview_process
+    global preview_process, last_restart_time
 
-    # Check if preview app is already running
+    # Check if preview app is already running and healthy
     if preview_process and preview_process.poll() is None:
-        print(f"✅ Preview app already running (PID: {preview_process.pid})")
-        return True, f"Preview running at {PREVIEW_URL}"
+        # Verify it's actually responsive on the port
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
+                if result == 0:
+                    print(
+                        f"✅ Preview app already running and healthy "
+                        f"(PID: {preview_process.pid})"
+                    )
+                    return True, f"Preview running at {PREVIEW_URL}"
+        except Exception:
+            pass
+
+    # Check cooldown period to avoid too frequent restarts
+    current_time = time.time()
+    if current_time - last_restart_time < RESTART_COOLDOWN:
+        remaining_cooldown = RESTART_COOLDOWN - (current_time - last_restart_time)
+        print(
+            f"⏳ Preview app restart on cooldown, {remaining_cooldown:.1f}s remaining"
+        )
+        if preview_process and preview_process.poll() is None:
+            # If there's still a process running, return success
+            return True, f"Preview running at {PREVIEW_URL}"
+        else:
+            return (
+                False,
+                f"Preview app on cooldown for {remaining_cooldown:.1f} more seconds",
+            )
 
     # Stop any existing process before starting a new one
     stop_preview_app()
+
+    # Update restart time
+    last_restart_time = current_time
 
     # Wait for the port to become available (up to 5 seconds)
     for i in range(10):  # 10 attempts * 0.5 seconds = 5 seconds max
@@ -206,7 +260,9 @@ def create_iframe_preview():
             )
             return iframe_html
         else:
-            print(f"⚠️ Preview app unhealthy: {status}, restarting...")
+            print(f"⚠️ Preview app unhealthy: {status}, attempting restart...")
+    else:
+        print("🔍 No preview process exists, starting new one")
 
     # Try to start the preview app and show an iframe
     success, message = start_preview_app()
@@ -218,8 +274,23 @@ def create_iframe_preview():
         print(f"🔍 Creating iframe: {iframe_html}")
         return iframe_html
     else:
-        error_html = f'<div style="color: red; padding: 20px;">{message}</div>'
-        print(f"🔍 Error in preview: {error_html}")
+        # Show a more user-friendly error message with retry option
+        error_html = f"""
+        <div style="color: #d32f2f; padding: 20px; text-align: center;
+                    border: 1px solid #d32f2f; border-radius: 8px;
+                    background: #ffebee;">
+            <h3>🚧 Preview App Temporarily Unavailable</h3>
+            <p><strong>Status:</strong> {message}</p>
+            <p>The preview app is starting up. Please wait a few seconds
+            and try refreshing.</p>
+            <button onclick="location.reload()" style="
+                background: #1976d2; color: white; border: none;
+                padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                Refresh Preview
+            </button>
+        </div>
+        """
+        print(f"🔍 Error in preview: {message}")
         return error_html
 
 
@@ -259,17 +330,35 @@ def check_preview_health():
         preview_process = None
         return False, "Process died"
 
-    # Check if responsive
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(1)
-            result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
-            if result == 0:
-                return True, "Healthy"
+    # Check if responsive with multiple attempts and longer timeout
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(3)  # Increased timeout from 1 to 3 seconds
+                result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
+                if result == 0:
+                    return True, "Healthy"
+                else:
+                    if attempt < max_attempts - 1:
+                        print(
+                            f"🔍 Health check attempt {attempt + 1}/"
+                            f"{max_attempts} failed, retrying..."
+                        )
+                        time.sleep(1)  # Wait before retrying
+                    else:
+                        return False, "Not responsive on port after multiple attempts"
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                print(
+                    f"🔍 Health check attempt {attempt + 1}/"
+                    f"{max_attempts} failed with error: {e}, retrying..."
+                )
+                time.sleep(1)
             else:
-                return False, "Not responsive on port"
-    except Exception as e:
-        return False, f"Connection check failed: {e}"
+                return False, f"Connection check failed: {e}"
+
+    return False, "Health check failed"
 
 
 def ensure_preview_running():
@@ -645,8 +734,22 @@ class GradioUI:
                 return create_iframe_preview()
 
             def refresh_all():
-                # First, ensure the preview app is (re)started
-                preview_content = create_iframe_preview()
+                # Only refresh preview if it's not currently healthy
+                current_preview = None
+                if preview_process is not None:
+                    healthy, status = check_preview_health()
+                    if healthy:
+                        # Preview is healthy, just return existing iframe
+                        current_preview = (
+                            f'<iframe src="{PREVIEW_URL}" '
+                            'width="100%" height="500px"></iframe>'
+                        )
+                    else:
+                        # Preview needs refresh
+                        current_preview = create_iframe_preview()
+                else:
+                    # No preview process, create one
+                    current_preview = create_iframe_preview()
 
                 # Then, update the file explorer and code editor
                 file_explorer_val = gr.FileExplorer(
@@ -663,7 +766,7 @@ class GradioUI:
                     interactive=True,
                     autocomplete=True,
                 )
-                return file_explorer_val, code_editor_val, preview_content
+                return file_explorer_val, code_editor_val, current_preview
 
             save_btn.click(
                 fn=save_file,

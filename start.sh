@@ -1,25 +1,25 @@
 #!/bin/bash
 
-# Start nginx in background as non-root user
+echo "===== Application Startup at $(date) ====="
+
+# Create necessary directories
+mkdir -p /var/run/nginx /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi /var/lib/nginx/uwsgi /var/lib/nginx/scgi /var/log/nginx
+
+# Set proper permissions
+chmod 755 /var/run/nginx /var/lib/nginx/* /var/log/nginx
+
+# Check if nginx is already running and stop it gracefully
+if pgrep nginx > /dev/null; then
+    echo "Stopping existing nginx..."
+    pkill nginx
+    sleep 2
+fi
+
+# Start nginx with our configuration
 echo "Starting nginx..."
-nginx -g 'daemon off;' &
-NGINX_PID=$!
-
-# Function to handle shutdown
-cleanup() {
-    echo "Shutting down..."
-    kill $NGINX_PID 2>/dev/null
-    wait $NGINX_PID 2>/dev/null
-    exit 0
-}
-
-# Set up signal handlers
-trap cleanup SIGTERM SIGINT
-
-# Wait a moment for nginx to start
+nginx -c /app/nginx.conf -g "daemon off;" &
 sleep 2
 
+# Start the main Gradio app
 echo "Starting Gradio app on port 7862..."
-# Run the main app in foreground so Docker captures its logs
-# Use -u flag to disable Python output buffering
-python -u app.py --server-port 7862 --server-name 0.0.0.0
+exec python app.py --server-port 7862 --server-name 0.0.0.0
