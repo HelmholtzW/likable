@@ -175,21 +175,14 @@ def start_preview_app():
         # Change to the directory containing the app file
         app_dir = str(Path(app_file).parent)
 
-        # The command needs to point to the Gradio app instance, e.g., 'app:demo'
-        # We derive this from the app_file path. 'sandbox/app.py' becomes 'app:demo'
-        # as the CWD is set to 'sandbox'.
-        app_module = Path(app_file).stem
-        gradio_app_instance = f"{app_module}:demo"
-
         preview_process = subprocess.Popen(
             [
-                "uvicorn",
-                gradio_app_instance,
-                "--host",
-                "0.0.0.0",
-                "--port",
+                "python",
+                "app.py",
+                "--server-port",
                 str(PREVIEW_PORT),
-                "--reload",
+                "--server-name",
+                "0.0.0.0",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -731,12 +724,31 @@ class GradioUI:
                 fn=load_file, inputs=file_explorer, outputs=code_editor
             )
 
-            def save_and_refresh(path, new_text):
-                save_file(path, new_text)
-                # Wait a moment for file to be saved
-                time.sleep(0.5)
-                # Gradio will auto-reload the preview app when files change
-                return create_iframe_preview()
+            def refresh_all_with_preview_restart():
+                """Refresh everything including forcing a preview app restart
+                to pick up code changes."""
+                print("🔄 Forcing preview app restart to pick up code changes...")
+                # Force stop the current preview app to pick up code changes
+                stop_preview_app()
+                # Start fresh with new code
+                current_preview = create_iframe_preview()
+
+                # Update the file explorer and code editor
+                file_explorer_val = gr.FileExplorer(
+                    scale=1,
+                    file_count="single",
+                    value="app.py",
+                    root_dir="sandbox",
+                )
+                code_editor_val = gr.Code(
+                    scale=3,
+                    value=load_file("sandbox/app.py"),
+                    language="python",
+                    visible=True,
+                    interactive=True,
+                    autocomplete=True,
+                )
+                return file_explorer_val, code_editor_val, current_preview
 
             def refresh_all():
                 # Only refresh preview if it's not currently healthy
@@ -777,7 +789,7 @@ class GradioUI:
                 fn=save_file,
                 inputs=[file_explorer, code_editor],
             ).then(
-                fn=refresh_all,
+                fn=refresh_all_with_preview_restart,
                 outputs=[file_explorer, code_editor, preview_html],
             )
 
