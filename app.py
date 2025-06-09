@@ -178,7 +178,7 @@ def start_preview_app():
         preview_process = subprocess.Popen(
             [
                 "python",
-                app_file,
+                "app.py",
                 "--server-port",
                 str(PREVIEW_PORT),
                 "--server-name",
