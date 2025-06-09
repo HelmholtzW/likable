@@ -17,10 +17,12 @@ PREVIEW_PORT = 7861  # Different port from main app
 def get_preview_url():
     """Get the appropriate preview URL based on environment."""
     # For simplified HF Spaces deployment, preview is handled differently
-    return "about:blank"
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        return "about:blank"
+    return f"http://127.0.0.1:{PREVIEW_PORT}"
 
 
-PREVIEW_URL = os.getenv("PREVIEW_URL", get_preview_url())
+PREVIEW_URL = get_preview_url()
 
 
 def find_app_py_in_sandbox():
@@ -56,57 +58,90 @@ def save_file(path, new_text):
 
 def stop_preview_app():
     """Stop the preview app subprocess if it's running."""
-    # In HF Spaces, preview app runs as separate service, no need to manage subprocess
+    # In HF Spaces, this logic is simplified
     if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        print("ℹ️ Preview subprocess management is disabled in Hugging Face Spaces.")
         return
 
     global preview_process
     if preview_process and preview_process.poll() is None:
-        print("🛑 Stopping preview app...")
+        print(f"🛑 Stopping preview app process (PID: {preview_process.pid})...")
         try:
-            # Send SIGTERM to gracefully shutdown
             preview_process.terminate()
-            # Wait a bit for graceful shutdown
             preview_process.wait(timeout=5)
-            print("✅ Preview app stopped gracefully")
+            print("✅ Preview app stopped gracefully.")
         except subprocess.TimeoutExpired:
-            # Force kill if graceful shutdown fails
             preview_process.kill()
-            print("⚠️ Preview app force-killed after timeout")
+            print("⚠️ Preview app force-killed after timeout.")
         except Exception as e:
             print(f"❌ Error stopping preview app: {e}")
         finally:
             preview_process = None
-    else:
-        if preview_process is None:
-            print("ℹ️ No preview app process to stop")
-        else:
-            print("ℹ️ Preview app process already terminated")
 
 
 def start_preview_app():
-    """Start the preview app in a subprocess."""
-    # For HF Spaces simplified deployment, return a simple success message
-    print("✅ Preview functionality simplified for HF Spaces")
-    return True, "Preview functionality available in main app"
+    """Start the preview app in a subprocess if it's not already running."""
+    # In HF Spaces, this logic is simplified
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        print("✅ Preview functionality simplified for HF Spaces.")
+        return True, "Preview is integrated and available."
+
+    global preview_process
+    # Stop any existing process before starting a new one
+    stop_preview_app()
+
+    app_file = find_app_py_in_sandbox()
+    if not app_file:
+        return False, "No `app.py` found in the `sandbox` directory."
+
+    print(f"🚀 Starting preview app from `{app_file}` on port {PREVIEW_PORT}...")
+    try:
+        preview_process = subprocess.Popen(
+            [
+                "python",
+                app_file,
+                "--server-port",
+                str(PREVIEW_PORT),
+                "--server-name",
+                "0.0.0.0",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        # Give it a moment to start up
+        time.sleep(3)
+        if preview_process.poll() is None:
+            print(f"✅ Preview app started successfully (PID: {preview_process.pid}).")
+            return True, f"Preview running at {PREVIEW_URL}"
+        else:
+            stderr = preview_process.stderr.read()
+            print(f"❌ Failed to start preview app. Error:\n{stderr}")
+            return False, f"Failed to start preview app:\n{stderr}"
+    except Exception as e:
+        print(f"❌ Exception while starting preview app: {e}")
+        return False, f"Error starting preview app: {e}"
 
 
 def create_iframe_preview():
-    """Create a simple iframe for the preview."""
-    print("🔄 Creating simplified preview for HF Spaces...")
+    """Create an iframe that loads the sandbox app."""
+    # In HF Spaces, we show a simplified message
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        return (
+            '<div style="padding: 20px; text-align: center; '
+            "background-color: #f8f9fa; border: 1px solid #e9ecef; "
+            'border-radius: 8px;">'
+            "<h3>📱 Preview</h3>"
+            "<p>Code preview is available after the AI generates an application.</p>"
+            "</div>"
+        )
 
-    # For HF Spaces, return a simple message instead of complex iframe
-    return (
-        '<div style="padding: 20px; text-align: center; '
-        "background-color: #f8f9fa; border: 1px solid #e9ecef; "
-        'border-radius: 8px;">'
-        "<h3>📱 Preview</h3>"
-        "<p>Code preview functionality is integrated into the main "
-        "application interface.</p>"
-        "<p>Generated applications will be available after creation "
-        "by the AI assistant.</p>"
-        "</div>"
-    )
+    # For local execution, attempt to start the preview and show an iframe
+    success, message = start_preview_app()
+    if success:
+        return f'<iframe src="{PREVIEW_URL}" width="100%" height="500px"></iframe>'
+    else:
+        return f'<div style="color: red; padding: 20px;">{message}</div>'
 
 
 def is_preview_running():
@@ -342,7 +377,10 @@ class GradioUI:
                 with gr.Column(scale=4, elem_classes="preview-container"):
                     with gr.Tab("Preview"):
                         preview_html = gr.HTML(
-                            value=create_iframe_preview(), elem_id="preview-container"
+                            value='<div style="padding: 20px;">'
+                            "Preview will load here."
+                            "</div>",
+                            elem_id="preview-container",
                         )
 
                     with gr.Tab("Code"):
@@ -482,14 +520,17 @@ class GradioUI:
                 return create_iframe_preview()
 
             def refresh_all():
-                file_explorer = gr.FileExplorer(
+                # First, ensure the preview app is (re)started
+                preview_content = create_iframe_preview()
+
+                # Then, update the file explorer and code editor
+                file_explorer_val = gr.FileExplorer(
                     scale=1,
                     file_count="single",
                     value="app.py",
                     root_dir="sandbox",
                 )
-
-                code_editor = gr.Code(
+                code_editor_val = gr.Code(
                     scale=3,
                     value=load_file("sandbox/app.py"),
                     language="python",
@@ -497,15 +538,14 @@ class GradioUI:
                     interactive=True,
                     autocomplete=True,
                 )
-
-                preview_html = create_iframe_preview()
-
-                return file_explorer, code_editor, preview_html
+                return file_explorer_val, code_editor_val, preview_content
 
             save_btn.click(
-                fn=save_and_refresh,
+                fn=save_file,
                 inputs=[file_explorer, code_editor],
-                outputs=[preview_html],
+            ).then(
+                fn=refresh_all,
+                outputs=[file_explorer, code_editor, preview_html],
             )
 
             text_input.submit(
@@ -518,7 +558,6 @@ class GradioUI:
                 [chatbot],
             ).then(
                 fn=refresh_all,
-                inputs=[],
                 outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
@@ -542,7 +581,6 @@ class GradioUI:
                 [chatbot],
             ).then(
                 fn=refresh_all,
-                inputs=[],
                 outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
@@ -557,7 +595,6 @@ class GradioUI:
             )
 
             def on_app_load():
-                ensure_preview_running()
                 return create_iframe_preview()
 
             demo.load(fn=on_app_load, outputs=[preview_html])
