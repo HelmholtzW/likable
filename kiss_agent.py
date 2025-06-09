@@ -336,47 +336,45 @@ def file_viewer(filename: str) -> str:
 @tool
 def test_app_py() -> str:
     """
-    Test the app.py file by running it as a subprocess and checking its output.
-    This tool will automatically find a free port to run the app on.
+    Test the app.py file by running it as a subprocess.
+    This test uses a hardcoded port (7865) to avoid conflicts.
+    A successful test means the app launches and runs without crashing.
     """
+    TEST_PORT = 7865
     try:
         app_path = Path("sandbox") / "app.py"
         if not app_path.exists():
             return "Error: app.py not found in sandbox directory."
 
-        # Find a free port to avoid conflicts
-        free_port = _find_free_port()
-        if free_port is None:
-            return "Error: Could not find any free ports to run the test."
-
-        print(f"Found free port {free_port}, running test...")
-
-        # Run the app as a subprocess with a timeout
+        print(f"--- Starting test on port {TEST_PORT} ---")
         process = subprocess.Popen(
-            ["python", str(app_path), "--server-port", str(free_port)],
+            ["python", str(app_path), "--server-port", str(TEST_PORT)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
-        stdout, stderr = process.communicate(timeout=15)
 
-        if "Running on local URL" in stdout:
-            return "✅ Test passed: App launched successfully."
-        elif process.returncode != 0:
+        # The key is to see if the process crashes quickly.
+        # If it runs for a few seconds, it's considered a success.
+        try:
+            # Wait for 5 seconds. If it exits, it's a failure.
+            stdout, stderr = process.communicate(timeout=5)
             error_message = (
-                f"❌ Test failed: App exited with code {process.returncode}\n"
+                f"❌ Test failed: App exited unexpectedly before timeout.\n"
+                f"---EXIT CODE---\n{process.returncode}\n"
                 f"---STDERR---\n{stderr}\n---STDOUT---\n{stdout}"
             )
             return error_message
-        else:
-            inconclusive_message = (
-                f"⚠️ Test inconclusive: App ran without clear success message.\n"
-                f"---STDERR---\n{stderr}\n---STDOUT---\n{stdout}"
-            )
-            return inconclusive_message
+        except subprocess.TimeoutExpired:
+            # This is the SUCCESS case! The app ran for 5s without crashing.
+            print("✅ Test successful: App process is stable.")
+            process.terminate()  # Clean up the process
+            try:
+                process.wait(timeout=2)  # Wait for graceful shutdown
+            except subprocess.TimeoutExpired:
+                process.kill()  # Force kill if it doesn't respond
+            return "✅ Test passed: App launched successfully."
 
-    except subprocess.TimeoutExpired:
-        return "❌ Test failed: App ran for over 15 seconds and was terminated."
     except Exception as e:
         return f"❌ An unexpected error occurred during testing: {str(e)}"
 
