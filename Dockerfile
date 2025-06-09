@@ -20,12 +20,8 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 # Copy application code
 COPY --chown=user . .
 
-# Create sandbox directory if it doesn't exist and add a dummy app.py
-RUN mkdir -p sandbox && \
-    echo 'import gradio as gr; gr.Interface(lambda x: "Preview not available", "text", "text").launch(server_port=7861, server_name="0.0.0.0")' > sandbox/app.py
-
-# Expose port 7860 (the only port HF Spaces allows)
+# Expose port 7860 (required by HF Spaces)
 EXPOSE 7860
 
-# Start the main application directly
+# Run the main application
 CMD ["python", "app.py"]
