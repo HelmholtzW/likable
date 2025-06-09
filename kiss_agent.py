@@ -1,5 +1,6 @@
 import os
 import re
+import socket
 import subprocess
 from pathlib import Path
 
@@ -164,6 +165,20 @@ def install_package(package_name: str) -> str:
             pass
 
 
+def _find_free_port(start_port=7860, max_ports=100):
+    """Find an available TCP port, starting from a given port."""
+    for port in range(start_port, start_port + max_ports):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            # This port is in use, try the next one
+            continue
+    return None
+
+
 @tool
 def python_editor(diff_content: str, filename: str = "app.py") -> str:
     """
@@ -321,113 +336,49 @@ def file_viewer(filename: str) -> str:
 @tool
 def test_app_py() -> str:
     """
-    Test if the current app.py runs without syntax errors and starts successfully.
-    For server applications like Gradio, this will start the server and then stop it.
-
-    Returns:
-        Test result message
+    Test the app.py file by running it as a subprocess and checking its output.
+    This tool will automatically find a free port to run the app on.
     """
     try:
         app_path = Path("sandbox") / "app.py"
-
         if not app_path.exists():
-            return "Error: app.py does not exist"
+            return "Error: app.py not found in sandbox directory."
 
-        # Store original working directory
-        original_cwd = os.getcwd()
+        # Find a free port to avoid conflicts
+        free_port = _find_free_port()
+        if free_port is None:
+            return "Error: Could not find any free ports to run the test."
 
-        # Change to project directory for testing
-        os.chdir(app_path.parent)
+        print(f"Found free port {free_port}, running test...")
 
-        # Start the subprocess without waiting for completion
+        # Run the app as a subprocess with a timeout
         process = subprocess.Popen(
-            ["python", "app.py"],
+            ["python", str(app_path), "--server-port", str(free_port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
+        stdout, stderr = process.communicate(timeout=15)
 
-        try:
-            # Wait for a short time to see if the process starts successfully
-            # If it exits immediately with an error, we'll catch it
-            stdout, stderr = process.communicate(timeout=5)
-
-            # If we get here, the process exited within 10 seconds
-            # Check for errors in stderr or stdout, not just return code
-            error_indicators = [
-                "error",
-                "exception",
-                "traceback",
-                "attributeerror",
-                "importerror",
-                "modulenotfounderror",
-            ]
-
-            # Combine stdout and stderr for error checking
-            all_output = (stdout or "") + (stderr or "")
-            all_output_lower = all_output.lower()
-
-            # Check if any error indicators are present
-            has_error = any(
-                indicator in all_output_lower for indicator in error_indicators
+        if "Running on local URL" in stdout:
+            return "✅ Test passed: App launched successfully."
+        elif process.returncode != 0:
+            error_message = (
+                f"❌ Test failed: App exited with code {process.returncode}\n"
+                f"---STDERR---\n{stderr}\n---STDOUT---\n{stdout}"
             )
+            return error_message
+        else:
+            inconclusive_message = (
+                f"⚠️ Test inconclusive: App ran without clear success message.\n"
+                f"---STDERR---\n{stderr}\n---STDOUT---\n{stdout}"
+            )
+            return inconclusive_message
 
-            if process.returncode != 0 or has_error:
-                error_output = stderr if stderr else stdout
-
-                # Check specifically for ModuleNotFoundError to
-                # suggest package installation
-                if (
-                    "modulenotfounderror" in all_output_lower
-                    or "no module named" in all_output_lower
-                ):
-                    # Try to extract the missing module name
-                    import_pattern = (
-                        r"(?:ModuleNotFoundError:|No module named) '?([^'\s]+)'?"
-                    )
-                    match = re.search(import_pattern, all_output, re.IGNORECASE)
-                    missing_module = match.group(1) if match else "unknown"
-                    return (
-                        f"❌ ModuleNotFoundError: Missing module '{missing_module}'\n"
-                        f"Consider using the install_package tool to install it.\n"
-                        f"Full error:\n{error_output}"
-                    )
-
-                return f"❌ Error running app.py:\n{error_output}"
-            else:
-                return "✅ app.py executed successfully"
-
-        except subprocess.TimeoutExpired:
-            # Process is still running after 3 seconds - likely a server
-            # This is actually good news for server apps like Gradio
-            process.terminate()
-
-            # Wait a bit for graceful termination
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                # Force kill if it doesn't terminate gracefully
-                process.kill()
-                process.wait()
-
-            # Check if there were any immediate errors in stderr
-            try:
-                _, stderr = process.communicate(timeout=1)
-                if stderr and "error" in stderr.lower():
-                    return f"❌ Error detected in app.py:\n{stderr}"
-            except Exception:
-                pass
-
-            return "✅ app.py started successfully (server detected and stopped)"
-
+    except subprocess.TimeoutExpired:
+        return "❌ Test failed: App ran for over 15 seconds and was terminated."
     except Exception as e:
-        return f"Error testing app.py: {str(e)}"
-    finally:
-        # Change back to original directory
-        try:
-            os.chdir(original_cwd)
-        except NameError:
-            pass
+        return f"❌ An unexpected error occurred during testing: {str(e)}"
 
 
 class KISSAgent(ToolCallingAgent):

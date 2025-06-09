@@ -39,6 +39,19 @@ signal.signal(signal.SIGINT, signal_handler)
 atexit.register(cleanup_preview_on_exit)
 
 
+def find_free_port(start_port=7860, max_ports=100):
+    """Find an available TCP port, starting from a given port."""
+    for port in range(start_port, start_port + max_ports):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            print(f" Port {port} is in use, trying next...")
+    return None
+
+
 def get_preview_url():
     """Get the appropriate preview URL with a cache-busting timestamp."""
     # Append a timestamp as a query parameter to break browser cache
@@ -277,10 +290,12 @@ def create_iframe_preview():
         <div style="color: #d32f2f; padding: 20px; text-align: center;
                     border: 1px solid #d32f2f; border-radius: 8px;
                     background: #ffebee;">
-            <h3>🚧 Preview App Temporarily Unavailable</h3>
-            <p><strong>Status:</strong> {message}</p>
-            <p>The preview app is starting up. Please wait a few seconds
-            and try refreshing.</p>
+            <h3 style="color: #d32f2f;">🚧 Preview App Temporarily Unavailable</h3>
+            <p style="color: #333333;"><strong>Status:</strong> {message}</p>
+            <p style="color: #333333;">
+                The preview app is starting up. Please wait a few seconds
+                and try refreshing.
+            </p>
             <button onclick="location.reload()" style="
                 background: #1976d2; color: white; border: none;
                 padding: 8px 16px; border-radius: 4px; cursor: pointer;">
@@ -893,18 +908,27 @@ if __name__ == "__main__":
         print(f"❌ Failed to start preview app: {message}")
 
     # Parse command line arguments for server configuration
-    server_port = 7860  # default
+    server_port_arg = 7860  # default
     server_name = "127.0.0.1"  # default
 
     if "--server-port" in sys.argv:
         port_idx = sys.argv.index("--server-port")
         if port_idx + 1 < len(sys.argv):
-            server_port = int(sys.argv[port_idx + 1])
+            server_port_arg = int(sys.argv[port_idx + 1])
 
     if "--server-name" in sys.argv:
         name_idx = sys.argv.index("--server-name")
         if name_idx + 1 < len(sys.argv):
             server_name = sys.argv[name_idx + 1]
+
+    # Find an available port for the main app, starting with the desired one
+    server_port = find_free_port(server_port_arg)
+    if server_port is None:
+        print(f"❌ Could not find any available ports starting from {server_port_arg}")
+        sys.exit(1)
+
+    if server_port != server_port_arg:
+        print(f"⚠️ Port {server_port_arg} was busy. Running on free port: {server_port}")
 
     GradioUI(agent).launch(
         share=False, server_port=server_port, server_name=server_name
