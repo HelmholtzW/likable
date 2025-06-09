@@ -15,6 +15,34 @@ you might need to edit or create other files.
 
 The overarching goal is always to create a Gradio application.
 
+**CRITICAL REQUIREMENT - ABSOLUTELY MANDATORY:**
+Every app.py file you create MUST end with EXACTLY this code block:
+
+```python
+# Launch the app
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the Gradio Todo App")
+    parser.add_argument(
+        "--server-port", type=int, default=7860, help="Port to run the server on"
+    )
+    parser.add_argument(
+        "--server-name", type=str, default="0.0.0.0", help="Server name to bind to"
+    )
+    args = parser.parse_args()
+
+    demo.launch(server_name=args.server_name, server_port=args.server_port)
+```
+
+**THIS IS NOT OPTIONAL. THE APP WILL NOT WORK WITHOUT THIS EXACT CODE.**
+**NEVER, UNDER ANY CIRCUMSTANCES, OMIT OR MODIFY THIS LAUNCH CODE.**
+**IF YOU CREATE AN APP.PY WITHOUT THIS EXACT ENDING, THE APPLICATION WILL FAIL.**
+
+Make sure to:
+1. Import argparse at the top of the file
+2. Name your Gradio interface `demo`
+3. Include the EXACT launch code shown above at the very end
+4. Adjust the description in argparse if needed for your specific app
+
 Here is the user's request:
 {task}
 
