@@ -621,6 +621,8 @@ class GradioUI:
 
 
 if __name__ == "__main__":
+    import sys
+
     from kiss_agent import KISSAgent
 
     agent = KISSAgent()
@@ -633,7 +635,20 @@ if __name__ == "__main__":
     else:
         print(f"❌ Failed to start preview app: {message}")
 
-    # Main app runs on internal port 7862, nginx proxies from 7860
-    port = 7862
+    # Parse command line arguments for server configuration
+    server_port = 7860  # default
+    server_name = "127.0.0.1"  # default
 
-    GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=port)
+    if "--server-port" in sys.argv:
+        port_idx = sys.argv.index("--server-port")
+        if port_idx + 1 < len(sys.argv):
+            server_port = int(sys.argv[port_idx + 1])
+
+    if "--server-name" in sys.argv:
+        name_idx = sys.argv.index("--server-name")
+        if name_idx + 1 < len(sys.argv):
+            server_name = sys.argv[name_idx + 1]
+
+    GradioUI(agent).launch(
+        share=False, server_port=server_port, server_name=server_name
+    )
