@@ -585,8 +585,8 @@ class GradioUI:
 
             # Add session state to store session-specific data
             session_state = gr.State({})
+            stored_messages = gr.State([])
             file_uploads_log = gr.State([])
-            processed_prompt = gr.State("")
 
             # Set up event handlers for API key saving
             def save_and_update_status(
@@ -676,10 +676,10 @@ class GradioUI:
             text_input.submit(
                 self.log_user_message,
                 [text_input, file_uploads_log],
-                [processed_prompt, text_input, submit_btn],
+                [stored_messages, text_input, submit_btn],
             ).then(
                 self.interact_with_agent,
-                [processed_prompt, chatbot, session_state],
+                [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
                 fn=refresh_all,
@@ -699,10 +699,10 @@ class GradioUI:
             submit_btn.click(
                 self.log_user_message,
                 [text_input, file_uploads_log],
-                [processed_prompt, text_input, submit_btn],
+                [stored_messages, text_input, submit_btn],
             ).then(
                 self.interact_with_agent,
-                [processed_prompt, chatbot, session_state],
+                [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
                 fn=refresh_all,
