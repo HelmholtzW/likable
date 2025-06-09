@@ -40,12 +40,9 @@ atexit.register(cleanup_preview_on_exit)
 
 
 def get_preview_url():
-    """Get the appropriate preview URL based on environment."""
-    # In Docker/HF Spaces with nginx proxy, use the proxy path
-    return "/preview/"
-
-
-PREVIEW_URL = get_preview_url()
+    """Get the appropriate preview URL with a cache-busting timestamp."""
+    # Append a timestamp as a query parameter to break browser cache
+    return f"/preview/?_t={int(time.time() * 1000)}"
 
 
 def is_port_available(port, host="0.0.0.0"):
@@ -129,7 +126,8 @@ def start_preview_app():
                         f"✅ Preview app already running and healthy "
                         f"(PID: {preview_process.pid})"
                     )
-                    return True, f"Preview running at {PREVIEW_URL}"
+                    # We don't need to return the URL here anymore
+                    return True, "Preview is running"
         except Exception:
             pass
 
@@ -142,7 +140,7 @@ def start_preview_app():
         )
         if preview_process and preview_process.poll() is None:
             # If there's still a process running, return success
-            return True, f"Preview running at {PREVIEW_URL}"
+            return True, "Preview is running"
         else:
             return (
                 False,
@@ -209,7 +207,7 @@ def start_preview_app():
                                 f"✅ Preview app is accepting connections on port "
                                 f"{PREVIEW_PORT}"
                             )
-                            return True, f"Preview running at {PREVIEW_URL}"
+                            return True, "Preview is running"
                         else:
                             print(
                                 f"❌ Preview app started but not accepting connections "
@@ -255,7 +253,8 @@ def create_iframe_preview():
         if healthy:
             print("✅ Preview app is healthy, using existing process")
             iframe_html = (
-                f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
+                f'<iframe src="{get_preview_url()}" '
+                'width="100%" height="500px"></iframe>'
             )
             return iframe_html
         else:
@@ -268,7 +267,8 @@ def create_iframe_preview():
     print(f"🔍 start_preview_app() result: success={success}, message={message}")
     if success:
         iframe_html = (
-            f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
+            f'<iframe src="{get_preview_url()}" '
+            'width="100%" height="500px"></iframe>'
         )
         return iframe_html
     else:
@@ -586,12 +586,11 @@ class GradioUI:
                 # Right side - Preview/Code/Settings Toggle
                 with gr.Column(scale=4, elem_classes="preview-container"):
                     with gr.Tab("Preview"):
-                        iframe_url = (
-                            f'<iframe src="{PREVIEW_URL}" '
-                            'width="100%" height="500px"></iframe>'
-                        )
                         preview_html = gr.HTML(
-                            value=iframe_url,
+                            value=(
+                                f'<iframe src="{get_preview_url()}" '
+                                'width="100%" height="500px"></iframe>'
+                            ),
                             elem_id="preview-container",
                         )
 
@@ -758,7 +757,7 @@ class GradioUI:
                     if healthy:
                         # Preview is healthy, just return existing iframe
                         current_preview = (
-                            f'<iframe src="{PREVIEW_URL}" '
+                            f'<iframe src="{get_preview_url()}" '
                             'width="100%" height="500px"></iframe>'
                         )
                     else:
