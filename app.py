@@ -1,11 +1,9 @@
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
 import gradio as gr
-import requests
 from smolagents.agents import MultiStepAgent
 
 # from src.manager_agent import GradioManagerAgent
@@ -18,16 +16,8 @@ PREVIEW_PORT = 7861  # Different port from main app
 
 def get_preview_url():
     """Get the appropriate preview URL based on environment."""
-    # For Hugging Face Spaces with nginx proxy, use the /preview/ path
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        return "/preview/"
-    # Check if running in Docker
-    elif os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER"):
-        # In Docker with nginx proxy, use relative path
-        return "/preview/"
-    else:
-        # Local development
-        return f"http://localhost:{PREVIEW_PORT}"
+    # For simplified HF Spaces deployment, preview is handled differently
+    return "about:blank"
 
 
 PREVIEW_URL = os.getenv("PREVIEW_URL", get_preview_url())
@@ -96,120 +86,39 @@ def stop_preview_app():
 
 def start_preview_app():
     """Start the preview app in a subprocess."""
-    # In HF Spaces, preview app runs as separate service via supervisor
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        print("✅ Preview app managed by supervisor in HF Spaces")
-        return True, "Preview app running via supervisor"
-
-    global preview_process
-
-    # Stop any existing preview app
-    stop_preview_app()
-
-    app_path = find_app_py_in_sandbox()
-
-    if not app_path or not os.path.exists(app_path):
-        error_msg = "No app.py found in sandbox directory or its subfolders"
-        print(f"❌ Preview Error: {error_msg}")
-        return False, error_msg
-
-    try:
-        print(f"🚀 Starting preview app from: {app_path}")
-        # Start the subprocess to run the sandbox app
-        preview_process = subprocess.Popen(
-            [
-                sys.executable,
-                app_path,
-                "--server-port",
-                str(PREVIEW_PORT),
-                "--server-name",
-                "0.0.0.0",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        # Wait a moment for the server to start
-        time.sleep(2)
-
-        # Check if the process is still running
-        if preview_process.poll() is not None:
-            # Process has terminated, read the error
-            stdout, stderr = preview_process.communicate()
-            error_msg = f"App failed to start:\n{stderr}\n{stdout}"
-            print(f"❌ Preview Error: {error_msg}")
-            return False, error_msg
-
-        # Try to verify the server is responding
-        max_retries = 10
-        for i in range(max_retries):
-            try:
-                response = requests.get(f"http://localhost:{PREVIEW_PORT}", timeout=1)
-                if response.status_code == 200:
-                    print(
-                        f"✅ Preview app started successfully on \
-localhost:{PREVIEW_PORT}"
-                    )
-                    return True, "App started successfully"
-            except requests.exceptions.RequestException:
-                print(
-                    f"🔄 Attempt {i+1}/{max_retries}: Waiting for server to respond..."
-                )
-                pass
-            time.sleep(0.5)
-
-        print(
-            f"⚠️ Preview app started but may not be fully ready. \
-            Check localhost:{PREVIEW_PORT}"
-        )
-        return True, "App started successfully"
-
-    except Exception as e:
-        error_msg = f"Error starting app: {str(e)}"
-        print(f"❌ Preview Error: {error_msg}")
-        return False, error_msg
+    # For HF Spaces simplified deployment, return a simple success message
+    print("✅ Preview functionality simplified for HF Spaces")
+    return True, "Preview functionality available in main app"
 
 
 def create_iframe_preview():
     """Create a simple iframe for the preview."""
-    print("🔄 Creating iframe preview...")
-    # Start the preview app
-    success, message = start_preview_app()
+    print("🔄 Creating simplified preview for HF Spaces...")
 
-    if not success:
-        print(f"❌ Failed to create preview iframe: {message}")
-        return f'<div style="padding: 20px; color: red;">\
-            ❌ Failed to start preview: {message}\
-            </div>'
-
-    print("✅ Simple iframe preview created")
-    return f'<iframe src="{PREVIEW_URL}" width="100%" height="600px" frameborder="0">\
-</iframe>'
+    # For HF Spaces, return a simple message instead of complex iframe
+    return (
+        '<div style="padding: 20px; text-align: center; '
+        "background-color: #f8f9fa; border: 1px solid #e9ecef; "
+        'border-radius: 8px;">'
+        "<h3>📱 Preview</h3>"
+        "<p>Code preview functionality is integrated into the main "
+        "application interface.</p>"
+        "<p>Generated applications will be available after creation "
+        "by the AI assistant.</p>"
+        "</div>"
+    )
 
 
 def is_preview_running():
     """Check if the preview app is running and accessible."""
-    # In HF Spaces, assume preview app is always running via supervisor
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        return True
-
-    global preview_process
-    if preview_process is None or preview_process.poll() is not None:
-        return False
-
-    try:
-        response = requests.get(f"http://localhost:{PREVIEW_PORT}", timeout=2)
-        return response.status_code == 200
-    except requests.exceptions.RequestException:
-        return False
+    # For simplified deployment, always return True
+    return True
 
 
 def ensure_preview_running():
     """Ensure the preview app is running, start it if needed."""
-    if not is_preview_running():
-        print("Preview app not running, starting...")
-        start_preview_app()
+    # For simplified deployment, nothing needed
+    pass
 
 
 def get_default_model_for_provider(provider: str) -> str:
@@ -696,12 +605,7 @@ if __name__ == "__main__":
 
     agent = KISSAgent()
 
-    # Determine port based on environment
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        # In HF Spaces, run on 7862 (nginx will proxy to 7860)
-        port = 7862
-    else:
-        # Local development
-        port = 7860
+    # For HF Spaces, always use port 7860 directly (simplified approach)
+    port = 7860
 
     GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=port)

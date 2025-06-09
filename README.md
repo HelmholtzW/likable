@@ -26,6 +26,6 @@ A powerful AI coding assistant that can create and preview Gradio applications i
 3. View the live preview in the Preview tab
 4. Edit code directly in the Code tab
 
-## Architecture
+## Docker Deployment
 
-This Space uses nginx as a reverse proxy to serve both the main application and preview applications on a single port, making it compatible with Hugging Face Spaces' single-port limitation.
+This Space runs a simplified Docker configuration optimized for Hugging Face Spaces, with the main Gradio application running directly on port 7860.
