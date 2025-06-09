@@ -94,13 +94,6 @@ def stop_preview_app():
     """Stop the preview app subprocess if it's running."""
     global preview_process
     if preview_process and preview_process.poll() is None:
-        # Add stack trace to understand what's calling this function
-        import traceback
-
-        print("🔍 DEBUGGING: stop_preview_app() called from:")
-        for line in traceback.format_stack()[-3:-1]:  # Show last 2 stack frames
-            print(f"   {line.strip()}")
-
         print(f"🛑 Stopping preview app process (PID: {preview_process.pid})...")
         try:
             preview_process.terminate()
@@ -258,7 +251,6 @@ def create_iframe_preview():
 
     # First, check if existing process is healthy
     if preview_process is not None:
-        print(f"🔍 Found existing preview process (PID: {preview_process.pid})")
         healthy, status = check_preview_health()
         print(f"🔍 Health check: {status}")
         if healthy:
@@ -266,7 +258,6 @@ def create_iframe_preview():
             iframe_html = (
                 f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
             )
-            print("🔍 Returning iframe HTML without restart")
             return iframe_html
         else:
             print(f"⚠️ Preview app unhealthy: {status}, attempting restart...")
@@ -274,14 +265,12 @@ def create_iframe_preview():
         print("🔍 No preview process exists, starting new one")
 
     # Try to start the preview app and show an iframe
-    print("🔍 About to call start_preview_app()")
     success, message = start_preview_app()
     print(f"🔍 start_preview_app() result: success={success}, message={message}")
     if success:
         iframe_html = (
             f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
         )
-        print(f"🔍 Creating iframe: {iframe_html}")
         return iframe_html
     else:
         # Show a more user-friendly error message with retry option
@@ -835,8 +824,9 @@ class GradioUI:
             # Load the preview iframe when the app starts
             demo.load(fn=create_iframe_preview, outputs=[preview_html])
 
-            # Clean up on app close
-            demo.unload(stop_preview_app)
+            # Note: Removed demo.unload(stop_preview_app) as it was causing
+            # preview app restarts on every page reload, leading to 502 errors.
+            # We have proper cleanup via signal handlers and atexit handlers.
 
         return demo
 
