@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo "===== Application Startup at $(date) ====="
-
 # Create necessary directories
 mkdir -p /var/run/nginx /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi /var/lib/nginx/uwsgi /var/lib/nginx/scgi /var/log/nginx
 

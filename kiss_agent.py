@@ -1,6 +1,5 @@
 import os
 import re
-import socket
 import subprocess
 from pathlib import Path
 
@@ -121,8 +120,8 @@ def create_new_file(whole_edit: str) -> str:
 @tool
 def install_package(package_name: str) -> str:
     """
-    Install a Python package using uv when encountering ModuleNotFoundError.
-    This tool adds the package to the project's dependencies and installs it.
+    Install a Python package using pip when encountering ModuleNotFoundError.
+    This tool installs the package to the user's local directory.
 
     Args:
         package_name: Name of the package to install (e.g., 'requests', 'pandas==2.0.0')
@@ -131,22 +130,17 @@ def install_package(package_name: str) -> str:
         Status message indicating success or failure
     """
     try:
-        # Store original working directory
-        original_cwd = os.getcwd()
-
-        # Change to the project root directory (where pyproject.toml is)
-        os.chdir(Path(__file__).parent)
-
-        # Run uv add command
+        # Run pip install with --user flag to install to user's local directory
+        # This matches the Docker container setup with /home/user/.local/bin in PATH
         result = subprocess.run(
-            ["uv", "add", package_name],
+            ["pip", "install", "--user", package_name],
             capture_output=True,
             text=True,
             timeout=60,  # 60 second timeout for package installation
         )
 
         if result.returncode == 0:
-            return f"✅ Successfully installed {package_name} using uv"
+            return f"✅ Successfully installed {package_name} using pip"
         else:
             error_msg = result.stderr or result.stdout
             return f"❌ Failed to install {package_name}:\n{error_msg}"
@@ -154,29 +148,9 @@ def install_package(package_name: str) -> str:
     except subprocess.TimeoutExpired:
         return f"❌ Installation of {package_name} timed out after 60 seconds"
     except FileNotFoundError:
-        return "❌ Error: uv command not found. Please make sure uv is installed."
+        return "❌ Error: pip command not found. Please make sure pip is installed."
     except Exception as e:
         return f"❌ Error installing {package_name}: {str(e)}"
-    finally:
-        # Change back to original directory
-        try:
-            os.chdir(original_cwd)
-        except NameError:
-            pass
-
-
-def _find_free_port(start_port=7860, max_ports=100):
-    """Find an available TCP port, starting from a given port."""
-    for port in range(start_port, start_port + max_ports):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind(("127.0.0.1", port))
-                return port
-        except OSError:
-            # This port is in use, try the next one
-            continue
-    return None
 
 
 @tool
