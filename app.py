@@ -178,7 +178,7 @@ def start_preview_app():
 
         preview_process = subprocess.Popen(
             [
-                "python",
+                "gradio",
                 app_filename,
                 "--server-port",
                 str(PREVIEW_PORT),
@@ -729,35 +729,8 @@ class GradioUI:
                 save_file(path, new_text)
                 # Wait a moment for file to be saved
                 time.sleep(0.5)
-                # Return updated iframe preview with forced refresh
+                # Gradio will auto-reload the preview app when files change
                 return create_iframe_preview()
-
-            def refresh_all_with_preview_restart():
-                """Refresh everything including forcing a preview app restart
-                to pick up code changes."""
-                print("🔄 Forcing preview app restart to pick up code changes...")
-                # Force stop the current preview app to pick up code changes
-                stop_preview_app()
-
-                # Start fresh with new code
-                current_preview = create_iframe_preview()
-
-                # Update the file explorer and code editor
-                file_explorer_val = gr.FileExplorer(
-                    scale=1,
-                    file_count="single",
-                    value="app.py",
-                    root_dir="sandbox",
-                )
-                code_editor_val = gr.Code(
-                    scale=3,
-                    value=load_file("sandbox/app.py"),
-                    language="python",
-                    visible=True,
-                    interactive=True,
-                    autocomplete=True,
-                )
-                return file_explorer_val, code_editor_val, current_preview
 
             def refresh_all():
                 # Only refresh preview if it's not currently healthy
@@ -798,7 +771,7 @@ class GradioUI:
                 fn=save_file,
                 inputs=[file_explorer, code_editor],
             ).then(
-                fn=refresh_all_with_preview_restart,
+                fn=refresh_all,
                 outputs=[file_explorer, code_editor, preview_html],
             )
 
