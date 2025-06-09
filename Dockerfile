@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.9-slim
 
 # Set up a new user named "user" with user ID 1000 (required by HF Spaces)
 RUN useradd -m -u 1000 user
