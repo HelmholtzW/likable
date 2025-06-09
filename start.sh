@@ -22,4 +22,4 @@ sleep 2
 
 # Start the main Gradio app
 echo "Starting Gradio app on port 7862..."
-exec python app.py --server-port 7862 --server-name 0.0.0.0
+exec python -u app.py --server-port 7862 --server-name 0.0.0.0
