@@ -11,15 +11,13 @@ from src.utils import load_file
 from ui_helpers import stream_to_gradio
 
 preview_process = None
-PREVIEW_PORT = 7861  # Different port from main app
+PREVIEW_PORT = 7861  # Internal port for preview apps
 
 
 def get_preview_url():
     """Get the appropriate preview URL based on environment."""
-    # For simplified HF Spaces deployment, preview is handled differently
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        return "about:blank"
-    return f"http://127.0.0.1:{PREVIEW_PORT}"
+    # In Docker/HF Spaces with nginx proxy, use the proxy path
+    return "/preview/"
 
 
 PREVIEW_URL = get_preview_url()
@@ -58,11 +56,6 @@ def save_file(path, new_text):
 
 def stop_preview_app():
     """Stop the preview app subprocess if it's running."""
-    # In HF Spaces, this logic is simplified
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        print("ℹ️ Preview subprocess management is disabled in Hugging Face Spaces.")
-        return
-
     global preview_process
     if preview_process and preview_process.poll() is None:
         print(f"🛑 Stopping preview app process (PID: {preview_process.pid})...")
@@ -81,11 +74,6 @@ def stop_preview_app():
 
 def start_preview_app():
     """Start the preview app in a subprocess if it's not already running."""
-    # In HF Spaces, this logic is simplified
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        print("✅ Preview functionality simplified for HF Spaces.")
-        return True, "Preview is integrated and available."
-
     global preview_process
     # Stop any existing process before starting a new one
     stop_preview_app()
@@ -125,35 +113,32 @@ def start_preview_app():
 
 def create_iframe_preview():
     """Create an iframe that loads the sandbox app."""
-    # In HF Spaces, we show a simplified message
-    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        return (
-            '<div style="padding: 20px; text-align: center; '
-            "background-color: #f8f9fa; border: 1px solid #e9ecef; "
-            'border-radius: 8px;">'
-            "<h3>📱 Preview</h3>"
-            "<p>Code preview is available after the AI generates an application.</p>"
-            "</div>"
-        )
-
-    # For local execution, attempt to start the preview and show an iframe
+    print("🔍 create_iframe_preview() called")
+    # Try to start the preview app and show an iframe
     success, message = start_preview_app()
+    print(f"🔍 start_preview_app() result: success={success}, message={message}")
     if success:
-        return f'<iframe src="{PREVIEW_URL}" width="100%" height="500px"></iframe>'
+        iframe_html = (
+            f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
+        )
+        print(f"🔍 Creating iframe: {iframe_html}")
+        return iframe_html
     else:
-        return f'<div style="color: red; padding: 20px;">{message}</div>'
+        error_html = f'<div style="color: red; padding: 20px;">{message}</div>'
+        print(f"🔍 Error in preview: {error_html}")
+        return error_html
 
 
 def is_preview_running():
     """Check if the preview app is running and accessible."""
-    # For simplified deployment, always return True
-    return True
+    global preview_process
+    return preview_process is not None and preview_process.poll() is None
 
 
 def ensure_preview_running():
     """Ensure the preview app is running, start it if needed."""
-    # For simplified deployment, nothing needed
-    pass
+    if not is_preview_running():
+        start_preview_app()
 
 
 def get_default_model_for_provider(provider: str) -> str:
@@ -355,11 +340,12 @@ class GradioUI:
             with gr.Row(elem_classes="main-container"):
                 # Left side - Chat Interface
                 with gr.Column(scale=1, elem_classes="chat-container"):
+                    avatar_url = (
+                        "http://em-content.zobj.net/source/apple/419/"
+                        "growing-heart_1f497.png"
+                    )
                     chatbot = gr.Chatbot(
-                        avatar_images=(
-                            None,
-                            "http://em-content.zobj.net/source/apple/419/growing-heart_1f497.png",
-                        ),
+                        avatar_images=(None, avatar_url),
                         type="messages",
                         resizable=True,
                         height="70vh",
@@ -376,10 +362,12 @@ class GradioUI:
                 # Right side - Preview/Code/Settings Toggle
                 with gr.Column(scale=4, elem_classes="preview-container"):
                     with gr.Tab("Preview"):
+                        iframe_url = (
+                            f'<iframe src="{PREVIEW_URL}" '
+                            'width="100%" height="500px"></iframe>'
+                        )
                         preview_html = gr.HTML(
-                            value='<div style="padding: 20px;">'
-                            "Preview will load here."
-                            "</div>",
+                            value=iframe_url,
                             elem_id="preview-container",
                         )
 
@@ -594,16 +582,11 @@ class GradioUI:
                 [text_input, submit_btn],
             )
 
-            def on_app_load():
-                return create_iframe_preview()
-
-            demo.load(fn=on_app_load, outputs=[preview_html])
+            # Load the preview iframe when the app starts
+            demo.load(fn=create_iframe_preview, outputs=[preview_html])
 
             # Clean up on app close
-            def cleanup():
-                stop_preview_app()
-
-            demo.unload(cleanup)
+            demo.unload(stop_preview_app)
 
         return demo
 
@@ -642,7 +625,15 @@ if __name__ == "__main__":
 
     agent = KISSAgent()
 
-    # For HF Spaces, always use port 7860 directly (simplified approach)
-    port = 7860
+    # Start the preview app automatically when the main app starts
+    print("🚀 Starting preview app automatically...")
+    success, message = start_preview_app()
+    if success:
+        print(f"✅ Preview app started: {message}")
+    else:
+        print(f"❌ Failed to start preview app: {message}")
+
+    # Main app runs on internal port 7862, nginx proxies from 7860
+    port = 7862
 
     GradioUI(agent).launch(share=False, server_name="0.0.0.0", server_port=port)
