@@ -1,4 +1,5 @@
 import os
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -21,6 +22,17 @@ def get_preview_url():
 
 
 PREVIEW_URL = get_preview_url()
+
+
+def is_port_available(port, host="0.0.0.0"):
+    """Check if a port is available for binding."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
 
 
 def find_app_py_in_sandbox():
@@ -65,7 +77,12 @@ def stop_preview_app():
             print("✅ Preview app stopped gracefully.")
         except subprocess.TimeoutExpired:
             preview_process.kill()
-            print("⚠️ Preview app force-killed after timeout.")
+            # Wait a bit longer for the kill to take effect
+            try:
+                preview_process.wait(timeout=2)
+                print("⚠️ Preview app force-killed after timeout.")
+            except subprocess.TimeoutExpired:
+                print("⚠️ Preview app may still be running after force-kill attempt.")
         except Exception as e:
             print(f"❌ Error stopping preview app: {e}")
         finally:
@@ -83,6 +100,17 @@ def start_preview_app():
 
     # Stop any existing process before starting a new one
     stop_preview_app()
+
+    # Wait for the port to become available (up to 5 seconds)
+    for i in range(10):  # 10 attempts * 0.5 seconds = 5 seconds max
+        if is_port_available(PREVIEW_PORT):
+            print(f"✅ Port {PREVIEW_PORT} is available")
+            break
+        print(f"⏳ Port {PREVIEW_PORT} still busy, waiting... (attempt {i+1}/10)")
+        time.sleep(0.5)
+    else:
+        print(f"❌ Port {PREVIEW_PORT} is still not available after 5 seconds")
+        return False, f"Port {PREVIEW_PORT} is not available"
 
     app_file = find_app_py_in_sandbox()
     if not app_file:
