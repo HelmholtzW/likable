@@ -8,13 +8,6 @@ mkdir -p /var/run/nginx /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/
 # Set proper permissions
 chmod 755 /var/run/nginx /var/lib/nginx/* /var/log/nginx
 
-# Check if nginx is already running and stop it gracefully
-if pgrep nginx > /dev/null; then
-    echo "Stopping existing nginx..."
-    pkill nginx
-    sleep 2
-fi
-
 # Start nginx with our configuration
 echo "Starting nginx..."
 nginx -c /app/nginx.conf -g "daemon off;" &
