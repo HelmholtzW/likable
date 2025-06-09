@@ -23,5 +23,5 @@ COPY --chown=user . .
 # Expose port 7860 (required by HF Spaces)
 EXPOSE 7860
 
-# Run the main application
-CMD ["python", "app.py"]
+# Run the main application using the 'gradio' command
+CMD ["gradio", "app.py", "--server_name", "0.0.0.0", "--server_port", "7860"]
