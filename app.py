@@ -75,6 +75,12 @@ def stop_preview_app():
 def start_preview_app():
     """Start the preview app in a subprocess if it's not already running."""
     global preview_process
+
+    # Check if preview app is already running
+    if preview_process and preview_process.poll() is None:
+        print(f"✅ Preview app already running (PID: {preview_process.pid})")
+        return True, f"Preview running at {PREVIEW_URL}"
+
     # Stop any existing process before starting a new one
     stop_preview_app()
 
