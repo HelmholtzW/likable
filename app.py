@@ -174,16 +174,22 @@ def start_preview_app():
     try:
         # Change to the directory containing the app file
         app_dir = str(Path(app_file).parent)
-        app_filename = Path(app_file).name
+
+        # The command needs to point to the Gradio app instance, e.g., 'app:demo'
+        # We derive this from the app_file path. 'sandbox/app.py' becomes 'app:demo'
+        # as the CWD is set to 'sandbox'.
+        app_module = Path(app_file).stem
+        gradio_app_instance = f"{app_module}:demo"
 
         preview_process = subprocess.Popen(
             [
-                "gradio",
-                app_filename,
-                "--server-port",
-                str(PREVIEW_PORT),
-                "--server-name",
+                "uvicorn",
+                gradio_app_instance,
+                "--host",
                 "0.0.0.0",
+                "--port",
+                str(PREVIEW_PORT),
+                "--reload",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
