@@ -802,7 +802,7 @@ class GradioUI:
                 [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
-                fn=refresh_all,
+                fn=refresh_all_with_preview_restart,
                 outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
@@ -825,7 +825,7 @@ class GradioUI:
                 [stored_messages, chatbot, session_state],
                 [chatbot],
             ).then(
-                fn=refresh_all,
+                fn=refresh_all_with_preview_restart,
                 outputs=[file_explorer, code_editor, preview_html],
             ).then(
                 lambda: (
