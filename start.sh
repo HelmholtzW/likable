@@ -21,4 +21,5 @@ sleep 2
 
 echo "Starting Gradio app on port 7862..."
 # Run the main app in foreground so Docker captures its logs
-python app.py --server-port 7862 --server-name 0.0.0.0
+# Use -u flag to disable Python output buffering
+python -u app.py --server-port 7862 --server-name 0.0.0.0
