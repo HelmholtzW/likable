@@ -84,10 +84,14 @@ def start_preview_app():
 
     print(f"🚀 Starting preview app from `{app_file}` on port {PREVIEW_PORT}...")
     try:
+        # Change to the directory containing the app file
+        app_dir = str(Path(app_file).parent)
+        app_filename = Path(app_file).name
+
         preview_process = subprocess.Popen(
             [
                 "python",
-                app_file,
+                app_filename,
                 "--server-port",
                 str(PREVIEW_PORT),
                 "--server-name",
@@ -96,6 +100,7 @@ def start_preview_app():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            cwd=app_dir,  # Set working directory to the app directory
         )
         # Give it a moment to start up
         time.sleep(3)
@@ -103,9 +108,10 @@ def start_preview_app():
             print(f"✅ Preview app started successfully (PID: {preview_process.pid}).")
             return True, f"Preview running at {PREVIEW_URL}"
         else:
-            stderr = preview_process.stderr.read()
-            print(f"❌ Failed to start preview app. Error:\n{stderr}")
-            return False, f"Failed to start preview app:\n{stderr}"
+            stdout, stderr = preview_process.communicate()
+            error_msg = f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            print(f"❌ Failed to start preview app. Error:\n{error_msg}")
+            return False, f"Failed to start preview app:\n{error_msg}"
     except Exception as e:
         print(f"❌ Exception while starting preview app: {e}")
         return False, f"Error starting preview app: {e}"
