@@ -138,9 +138,49 @@ def start_preview_app():
         )
         # Give it a moment to start up
         time.sleep(3)
+
+        # Check if process is still running
         if preview_process.poll() is None:
             print(f"✅ Preview app started successfully (PID: {preview_process.pid}).")
-            return True, f"Preview running at {PREVIEW_URL}"
+
+            # Additional check: verify the process is actually listening on the port
+            time.sleep(2)  # Give it a bit more time to fully initialize
+            if preview_process.poll() is None:
+                # Check if port is actually being used (reverse of availability check)
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                        sock.settimeout(1)
+                        result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
+                        if result == 0:
+                            print(
+                                f"✅ Preview app is accepting connections on port "
+                                f"{PREVIEW_PORT}"
+                            )
+                            return True, f"Preview running at {PREVIEW_URL}"
+                        else:
+                            print(
+                                f"❌ Preview app started but not accepting connections "
+                                f"on port {PREVIEW_PORT}"
+                            )
+                            # Get error output
+                            try:
+                                stdout, stderr = preview_process.communicate(timeout=1)
+                                error_msg = f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+                                print(f"Process output: {error_msg}")
+                            except subprocess.TimeoutExpired:
+                                print("Process still running but not responsive")
+                            return False, "Preview app not accepting connections"
+                except Exception as e:
+                    print(f"❌ Error checking port connection: {e}")
+                    return False, f"Error verifying connection: {e}"
+            else:
+                stdout, stderr = preview_process.communicate()
+                error_msg = (
+                    f"Process exited during initialization. "
+                    f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+                )
+                print(f"❌ {error_msg}")
+                return False, f"Preview app crashed during startup:\n{error_msg}"
         else:
             stdout, stderr = preview_process.communicate()
             error_msg = f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
@@ -154,6 +194,20 @@ def start_preview_app():
 def create_iframe_preview():
     """Create an iframe that loads the sandbox app."""
     print("🔍 create_iframe_preview() called")
+
+    # First, check if existing process is healthy
+    if preview_process is not None:
+        healthy, status = check_preview_health()
+        print(f"🔍 Health check: {status}")
+        if healthy:
+            print("✅ Preview app is healthy, using existing process")
+            iframe_html = (
+                f'<iframe src="{PREVIEW_URL}" ' 'width="100%" height="500px"></iframe>'
+            )
+            return iframe_html
+        else:
+            print(f"⚠️ Preview app unhealthy: {status}, restarting...")
+
     # Try to start the preview app and show an iframe
     success, message = start_preview_app()
     print(f"🔍 start_preview_app() result: success={success}, message={message}")
@@ -172,7 +226,50 @@ def create_iframe_preview():
 def is_preview_running():
     """Check if the preview app is running and accessible."""
     global preview_process
-    return preview_process is not None and preview_process.poll() is None
+
+    # First check if process exists
+    if preview_process is None or preview_process.poll() is not None:
+        return False
+
+    # Then check if it's actually responsive on the port
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
+            return result == 0
+    except Exception:
+        return False
+
+
+def check_preview_health():
+    """Check if the preview app is healthy and restart if needed."""
+    global preview_process
+
+    if preview_process is None:
+        return False, "No preview process"
+
+    if preview_process.poll() is not None:
+        # Process has exited
+        try:
+            stdout, stderr = preview_process.communicate()
+            error_msg = f"Process exited. STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            print(f"🚨 Preview process died: {error_msg}")
+        except Exception as e:
+            print(f"🚨 Preview process died: {e}")
+        preview_process = None
+        return False, "Process died"
+
+    # Check if responsive
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            result = sock.connect_ex(("127.0.0.1", PREVIEW_PORT))
+            if result == 0:
+                return True, "Healthy"
+            else:
+                return False, "Not responsive on port"
+    except Exception as e:
+        return False, f"Connection check failed: {e}"
 
 
 def ensure_preview_running():
