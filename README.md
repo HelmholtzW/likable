@@ -2,6 +2,8 @@
 
 A powerful AI coding assistant that can create and preview Gradio applications in real-time.
 
+This repository is currently deployed on (HuggingFace Spaces)[https://huggingface.co/spaces/ZwischenholtzW/likable]. Feel free to check it out over there or run it locally.
+
 ## Features
 
 - **Real-time Code Generation**: AI agent that can write and modify code
