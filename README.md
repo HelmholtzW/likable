@@ -1,13 +1,4 @@
----
-title: Likable GitHub
-emoji: 💗
-colorFrom: purple
-colorTo: pink
-sdk: docker
-app_port: 7860
----
-
-# 💗 Likable GitHub
+# 💗 Likable
 
 A powerful AI coding assistant that can create and preview Gradio applications in real-time.
 
